@@ -1,0 +1,15 @@
+{
+  mode: "client",
+  connect: {
+    endpoints: ["tcp/127.0.0.1:7447"]
+  },
+  plugins: {
+    ros2dds: {
+      domain: 0,
+      ros_localhost_only: false
+    }
+  },
+  scouting: {
+    multicast: { enabled: false }
+  }
+}
