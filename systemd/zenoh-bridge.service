@@ -1,0 +1,18 @@
+[Unit]
+Description=Zenoh-ROS2DDS bridge for Go2 (CycloneDDS -> Zenoh)
+After=zenoh-router.service network-online.target
+Requires=zenoh-router.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=northjar
+Environment=RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+Environment=ROS_DOMAIN_ID=0
+Environment=CYCLONEDDS_URI=file:///etc/zenoh/cyclonedds.xml
+ExecStart=/bin/bash -c 'source /opt/ros/jazzy/setup.bash && exec /usr/local/bin/zenoh-bridge-ros2dds --config /etc/zenoh/bridge.json5'
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,15 @@
+[Unit]
+Description=Zenoh Router for Go2 ROS2 bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=northjar
+Environment=ZENOH_ROUTER_CONFIG_URI=file:///etc/zenoh/router.json5
+ExecStart=/bin/bash -c 'source /opt/ros/jazzy/setup.bash && exec ros2 run rmw_zenoh_cpp rmw_zenohd'
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
