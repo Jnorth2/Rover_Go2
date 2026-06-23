@@ -1,0 +1,17 @@
+{
+  mode: "client",
+  connect: {
+    endpoints: ["tcp/127.0.0.1:7447"]
+  },
+  plugins: {
+    ros2dds: {
+      domain: 0,
+      // Groundstation ROS 2 nodes use ROS_LOCALHOST_ONLY=1. DDS traffic stays
+      // on this laptop; Zenoh carries the remote traffic to and from the Orin.
+      ros_localhost_only: true
+    }
+  },
+  scouting: {
+    multicast: { enabled: false }
+  }
+}

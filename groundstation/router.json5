@@ -1,0 +1,19 @@
+{
+  mode: "router",
+
+  // Groundstation -> Jetson Orin Zenoh router.
+  connect: {
+    endpoints: ["tcp/192.168.123.99:7447"],
+    timeout_ms: { router: -1, peer: -1, client: 0 },
+    exit_on_failure: { router: false, peer: false, client: true }
+  },
+
+  // The local groundstation ROS2DDS bridge connects on port 7447.
+  listen: {
+    endpoints: ["tcp/[::]:7447"]
+  },
+
+  scouting: {
+    multicast: { enabled: false }
+  }
+}

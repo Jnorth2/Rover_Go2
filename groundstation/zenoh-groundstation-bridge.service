@@ -1,0 +1,17 @@
+[Unit]
+Description=Zenoh ROS2DDS bridge for the Rover Go2 groundstation
+Documentation=file:///etc/zenoh/groundstation-bridge.json5
+After=zenoh-groundstation-router.service network-online.target
+Requires=zenoh-groundstation-router.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=ROS_DOMAIN_ID=0
+Environment=ROS_LOCALHOST_ONLY=1
+ExecStart=/bin/bash -lc 'source /opt/ros/humble/setup.bash && exec /usr/bin/zenoh-bridge-ros2dds --config /etc/zenoh/groundstation-bridge.json5'
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

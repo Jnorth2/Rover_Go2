@@ -1,0 +1,15 @@
+[Unit]
+Description=Zenoh router for the Rover Go2 groundstation
+Documentation=file:///etc/zenoh/groundstation-router.json5
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+Environment=ZENOH_ROUTER_CONFIG_URI=/etc/zenoh/groundstation-router.json5
+ExecStart=/bin/bash -lc 'source /opt/ros/humble/setup.bash && exec ros2 run rmw_zenoh_cpp rmw_zenohd'
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
