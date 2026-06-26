@@ -7,9 +7,10 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
   exit 1
 fi
 
-source /opt/ros/humble/setup.bash
-export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-export ROS_DOMAIN_ID=0
-export ROS_LOCALHOST_ONLY=1
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
-echo "Groundstation ROS 2 environment configured for the local ROS2DDS bridge."
+source /opt/ros/jazzy/setup.bash
+export RMW_IMPLEMENTATION=rmw_zenoh_cpp
+export ZENOH_ROUTER_CONFIG_URI="${SCRIPT_DIR}/client.json5"
+
+echo "Groundstation ROS 2 environment: rmw_zenoh_cpp -> localhost:7447"

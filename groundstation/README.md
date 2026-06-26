@@ -1,51 +1,37 @@
-# Groundstation Zenoh and ROS2DDS bridge
+# Groundstation Zenoh Setup
 
-The groundstation uses a paired ROS2DDS bridge. This is the matching endpoint
-for `zenoh-bridge-ros2dds` on the Jetson Orin:
+The groundstation runs a Zenoh router that federates with the Jetson Orin's
+router. ROS 2 nodes on the laptop use `rmw_zenoh_cpp` as their RMW and connect
+as Zenoh clients to the local router. No separate ROS2DDS bridge is needed on
+the groundstation.
 
 ```text
 Go2 CycloneDDS
-  -> Jetson ROS2DDS bridge
+  -> Jetson zenoh-bridge-ros2dds (CycloneDDS -> Zenoh client)
   -> Jetson Zenoh router (192.168.123.99:7447)
-  -> groundstation Zenoh router
-  -> groundstation ROS2DDS bridge
-  -> local CycloneDDS nodes
+  -> Groundstation Zenoh router (connects out to Jetson, listens on :7447)
+  -> Groundstation ROS 2 nodes (rmw_zenoh_cpp -> localhost:7447)
 ```
 
-Local ROS 2 nodes use CycloneDDS with `ROS_LOCALHOST_ONLY=1`. DDS discovery
-therefore remains on the laptop; only Zenoh traffic crosses the network link.
-Do not use `rmw_zenoh_cpp` for the groundstation ROS nodes in this topology.
+The Jetson's `zenoh-bridge-ros2dds` is the only bridge in the chain. It reads
+Go2 DDS topics via the `enP8p1s0` interface and injects them into the Zenoh
+mesh. The groundstation sees those topics natively through `rmw_zenoh_cpp`.
 
 ## Prerequisites
 
-- ROS 2 Humble at `/opt/ros/humble`
-- `ros-humble-rmw-zenoh-cpp` (provides the local `rmw_zenohd` router)
-- `ros-humble-rmw-cyclonedds-cpp` (used by groundstation ROS nodes)
-- `zenoh-bridge-ros2dds` version `1.9.0`, matching the Jetson bridge
+- ROS 2 Jazzy at `/opt/ros/jazzy`
+- `ros-jazzy-rmw-zenoh-cpp` (provides `rmw_zenohd`)
 - TCP access to the Jetson at `192.168.123.99:7447`
-- The same custom ROS message packages on both machines
+- The same custom ROS message packages built on both machines
 
-Install the ROS packages:
+Install:
 
 ```bash
 sudo apt update
-sudo apt install ros-humble-rmw-zenoh-cpp ros-humble-rmw-cyclonedds-cpp unzip
+sudo apt install ros-jazzy-rmw-zenoh-cpp
 ```
 
-Install the official x86_64 Linux ROS2DDS bridge package:
-
-```bash
-cd /tmp
-curl -fLO https://github.com/eclipse-zenoh/zenoh-plugin-ros2dds/releases/download/1.9.0/zenoh-plugin-ros2dds-1.9.0-x86_64-unknown-linux-gnu-debian.zip
-unzip zenoh-plugin-ros2dds-1.9.0-x86_64-unknown-linux-gnu-debian.zip
-sudo apt install ./zenoh-bridge-ros2dds_1.9.0_amd64.deb
-/usr/bin/zenoh-bridge-ros2dds --version
-```
-
-The release package is from the official [Eclipse Zenoh v1.9.0
-release](https://github.com/eclipse-zenoh/zenoh-plugin-ros2dds/releases/tag/1.9.0).
-
-Check network access before starting:
+Verify network access before starting:
 
 ```bash
 ping -c 3 192.168.123.99
@@ -54,82 +40,66 @@ nc -vz 192.168.123.99 7447
 
 ## Option 1: automatic startup with systemd
 
-From this directory, install both configurations and services:
+From this directory:
 
 ```bash
 sudo install -d -m 0755 /etc/zenoh
 sudo install -m 0644 router.json5 /etc/zenoh/groundstation-router.json5
-sudo install -m 0644 bridge.json5 /etc/zenoh/groundstation-bridge.json5
 sudo install -m 0644 zenoh-groundstation-router.service /etc/systemd/system/
-sudo install -m 0644 zenoh-groundstation-bridge.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now zenoh-groundstation-router.service
-sudo systemctl enable --now zenoh-groundstation-bridge.service
 ```
 
-The bridge unit requires the router unit, so systemd starts them in the correct
-order. Check their status and logs with:
+Check status and logs:
 
 ```bash
-systemctl status zenoh-groundstation-router.service zenoh-groundstation-bridge.service
-journalctl -u zenoh-groundstation-router.service -u zenoh-groundstation-bridge.service -f
+systemctl status zenoh-groundstation-router.service
+journalctl -u zenoh-groundstation-router.service -f
 ```
 
-After editing either JSON5 file, reinstall it and restart both services:
+After editing `router.json5`:
 
 ```bash
 sudo install -m 0644 router.json5 /etc/zenoh/groundstation-router.json5
-sudo install -m 0644 bridge.json5 /etc/zenoh/groundstation-bridge.json5
-sudo systemctl restart zenoh-groundstation-router.service zenoh-groundstation-bridge.service
+sudo systemctl restart zenoh-groundstation-router.service
 ```
 
-Disable automatic startup and stop both processes:
+Disable and stop:
 
 ```bash
-sudo systemctl disable --now zenoh-groundstation-bridge.service
 sudo systemctl disable --now zenoh-groundstation-router.service
+sudo rm /etc/systemd/system/zenoh-groundstation-router.service
+sudo rm /etc/zenoh/groundstation-router.json5
+sudo systemctl daemon-reload
 ```
 
 ## Option 2: run manually
 
-Stop the systemd services first to avoid duplicate processes:
-
-```bash
-sudo systemctl stop zenoh-groundstation-bridge.service zenoh-groundstation-router.service
-```
-
-Start the router in terminal 1:
+Start the router in a dedicated terminal:
 
 ```bash
 ./run-zenoh-router.sh
 ```
 
-Start the bridge in terminal 2:
-
-```bash
-./run-zenoh-bridge.sh
-```
-
-Press `Ctrl+C` in each terminal to stop the manual processes.
+Press `Ctrl+C` to stop.
 
 ## Use ROS 2 on the groundstation
 
-With the router and bridge running, open a third terminal:
+With the router running, open a new terminal and source the environment:
 
 ```bash
-cd /home/jn2/Rover_Go2/groundstation
+cd /home/jn2-alt/Rover_Go2/groundstation
 source ./ros2-local.sh
 ros2 daemon stop
 ros2 topic list
 ```
 
-The daemon restart is important if `ros2` was previously run using another RMW
-implementation or discovery configuration. Use the same sourced environment for
-commands such as:
+The `ros2 daemon stop` is important if the daemon was previously started under a
+different RMW. Use the same sourced environment for all commands:
 
 ```bash
-ros2 topic info /utlidar/imu --verbose
 ros2 topic echo /utlidar/imu --once
+ros2 topic info /utlidar/imu --verbose
 ```
 
 Source your workspace after `ros2-local.sh` when custom Go2 messages are needed:
@@ -141,36 +111,32 @@ source /path/to/your_workspace/install/setup.bash
 
 ## Troubleshooting
 
-Confirm all three TCP sessions on the groundstation:
+Confirm the router is connected to the Jetson:
 
 ```bash
 sudo ss -ntp | grep ':7447'
 ```
 
-You should see the groundstation router connected to `192.168.123.99:7447`
-and the local bridge connected to `127.0.0.1:7447`.
+You should see one connection to `192.168.123.99:7447` (the Jetson) and the
+rmw_zenohd process listening on `0.0.0.0:7447`.
 
-If only `/parameter_events` and `/rosout` appear, first verify that the Jetson
-can see native Go2 topics using CycloneDDS. A paired bridge cannot transport
-topics that the Jetson bridge has not discovered.
-
-Remove the installed groundstation units and configurations with:
-
-```bash
-sudo systemctl disable --now zenoh-groundstation-bridge.service zenoh-groundstation-router.service
-sudo rm /etc/systemd/system/zenoh-groundstation-bridge.service
-sudo rm /etc/systemd/system/zenoh-groundstation-router.service
-sudo rm /etc/zenoh/groundstation-bridge.json5
-sudo rm /etc/zenoh/groundstation-router.json5
-sudo systemctl daemon-reload
-```
+If `ros2 topic list` only shows `/parameter_events` and `/rosout`, confirm the
+Jetson's `zenoh-bridge-ros2dds` is running and that it can see Go2 DDS topics
+via CycloneDDS. A fresh `ros2 daemon stop` before listing is usually required
+after sourcing a new environment.
 
 ## Files
 
-- `router.json5`: connects the groundstation router to the Jetson
-- `bridge.json5`: connects the local ROS2DDS bridge to the local router
-- `zenoh-groundstation-router.service`: automatic router startup
-- `zenoh-groundstation-bridge.service`: automatic bridge startup
-- `run-zenoh-router.sh`: manual router launcher
-- `run-zenoh-bridge.sh`: manual bridge launcher
-- `ros2-local.sh`: environment for local Humble CycloneDDS commands
+- `router.json5` — groundstation router; connects to Jetson, listens on :7447
+- `client.json5` — Zenoh client config for `rmw_zenoh_cpp` ROS 2 nodes
+- `zenoh-groundstation-router.service` — systemd unit for automatic router startup
+- `run-zenoh-router.sh` — manual router launcher
+- `ros2-local.sh` — sets `RMW_IMPLEMENTATION=rmw_zenoh_cpp` and `ZENOH_ROUTER_CONFIG_URI`
+
+### Legacy: groundstation ROS2DDS bridge
+
+The files `bridge.json5`, `run-zenoh-bridge.sh`, and
+`zenoh-groundstation-bridge.service` implement a double-bridge topology where
+the groundstation also runs `zenoh-bridge-ros2dds` and local nodes use
+CycloneDDS. This is no longer the recommended approach; use `rmw_zenoh_cpp`
+directly as described above.

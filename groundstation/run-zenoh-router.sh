@@ -2,7 +2,7 @@
 set -eo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-ROS_SETUP="${ROS_SETUP:-/opt/ros/humble/setup.bash}"
+ROS_SETUP="${ROS_SETUP:-/opt/ros/jazzy/setup.bash}"
 
 if [[ ! -r "${ROS_SETUP}" ]]; then
   echo "ROS setup file not found: ${ROS_SETUP}" >&2

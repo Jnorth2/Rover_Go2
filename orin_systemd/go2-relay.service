@@ -1,0 +1,21 @@
+[Unit]
+Description=Go2 bare-DDS to ROS2 relay (makes topics visible to zenoh-bridge-ros2dds)
+Documentation=file:///etc/zenoh/go2_relay.py
+After=zenoh-bridge.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=northjar
+Environment=RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+Environment=CYCLONEDDS_URI=file:///etc/zenoh/cyclonedds.xml
+Environment=ROS_DOMAIN_ID=0
+ExecStart=/bin/bash -c '\
+  source /opt/ros/jazzy/setup.bash && \
+  source /home/northjar/unitree_ws/install/setup.bash && \
+  exec python3 /etc/zenoh/go2_relay.py'
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
