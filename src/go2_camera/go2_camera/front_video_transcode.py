@@ -110,10 +110,20 @@ class FrontVideoTranscodeNode(Node):
                 f'buf {self._nal_count}: {len(data)}B NAL types={nal_types}'
             )
 
-        # Cache any SPS/PPS the Go2 emits (only at camera boot).
-        # Re-inject them before every IDR if we ever get one.
+        # Split into individual NAL units and push one at a time so h264parse
+        # can correctly detect access unit boundaries across the two slices the
+        # Go2 sends per frame.
         nals = self._split_nals(data)
+
+        # If an IDR is present but SPS/PPS aren't in this message, inject cached ones first.
+        types_in_msg = {n[4] & 0x1F for n in nals if len(n) >= 5}
+        if 5 in types_in_msg and 7 not in types_in_msg and self._sps and self._pps:
+            self._push(self._sps)
+            self._push(self._pps)
+
         for nal in nals:
+            if len(nal) < 5:
+                continue
             nal_type = nal[4] & 0x1F
             if nal_type == 7:
                 if self._sps != nal:
@@ -123,11 +133,7 @@ class FrontVideoTranscodeNode(Node):
                 if self._pps != nal:
                     self._pps = nal
                     self.get_logger().info(f'Captured PPS ({len(nal)}B)')
-            elif nal_type == 5 and self._sps and self._pps:
-                # IDR arrived — prepend SPS+PPS so decoder (re)initialises cleanly
-                data = self._sps + self._pps + data
-
-        self._push(data)
+            self._push(nal)
 
     def _split_nals(self, data):
         nals = []
