@@ -6,6 +6,7 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 
 from unitree_go.msg import Go2FrontVideoData
+from std_msgs.msg import String
 
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst, GLib
@@ -49,6 +50,20 @@ class FrontVideoTranscodeNode(Node):
             raw=True,
         )
         self.get_logger().info('Subscribed to /frontvideostream (raw CDR mode)')
+
+        # Publish to videohub/inner to trigger a fresh 720p stream with SPS+PPS+IDR.
+        # The phone app does the same when it launches ({"1080p":"on"}).
+        # Use a short one-shot timer so the subscription is fully set up before the
+        # trigger fires and the encoder restarts.
+        self._videohub_pub = self.create_publisher(String, '/videohub/inner', 1)
+        self._videohub_timer = self.create_timer(0.2, self._trigger_video_restart)
+
+    def _trigger_video_restart(self):
+        self._videohub_timer.cancel()
+        msg = String()
+        msg.data = '{"720p":"on"}'
+        self._videohub_pub.publish(msg)
+        self.get_logger().info('Sent videohub trigger: {"720p":"on"}')
 
     def _start_pipeline(self):
         gs_ip = self.get_parameter('gs_ip').value
