@@ -1,54 +1,66 @@
-#!/usr/bin/env python3
-"""
-Front camera H264 relay.
-
-Bypasses rclpy/rmw entirely — uses cyclonedds-python directly so the CDR
-deserializer only reads the two fields that actually exist on the wire
-(time_frame + video720p).  The rmw_cyclonedds layer crashes trying to
-read video360p / video180p (which the Go2 does not send), dropping IDR
-frames and preventing the decoder from ever starting.
-"""
 import sys
 import threading
 import gi
+import rclpy
+from rclpy.node import Node
+from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
+
+from unitree_go.msg import Go2FrontVideoData
 
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst, GLib
 
-from dataclasses import dataclass
-from cyclonedds.domain import DomainParticipant
-from cyclonedds.sub import DataReader
-from cyclonedds.topic import Topic
-from cyclonedds.qos import Qos, Policy
-from cyclonedds.idl import IdlStruct
-from cyclonedds.idl.types import sequence, uint8, uint64
-from cyclonedds.core import WaitSet, ReadCondition, ViewState, InstanceState, SampleState
-
 Gst.init(sys.argv)
-
-# Only declare the two fields the Go2 actually sends.
-# CycloneDDS X-Types allows a subscriber to define fewer fields than the
-# publisher; extra fields are silently ignored rather than causing errors.
-@dataclass
-class Go2FrontVideoData(IdlStruct,
-                        typename='unitree_go::msg::dds_::Go2FrontVideoData_'):
-    time_frame: uint64
-    video720p: sequence[uint8]
-
 
 H264_START = b'\x00\x00\x00\x01'
 
 
-class FrontVideoRelay:
-    def __init__(self, gs_ip, gs_port, framerate, fec_percentage):
+class FrontVideoTranscodeNode(Node):
+    def __init__(self):
+        super().__init__('front_video_transcode')
+
+        self.declare_parameter('gs_ip', '192.168.123.100')
+        self.declare_parameter('gs_port', 42074)
+        self.declare_parameter('framerate', 30)
+        self.declare_parameter('fec_percentage', 30)
+
         self.pipeline = None
         self.appsrc = None
         self.bus = None
         self.loop = None
         self.gst_thread = None
         self.pts = 0
-        self.frame_duration = Gst.SECOND // framerate
+        self.frame_duration = 0
         self._nal_count = 0
+
+        self._start_pipeline()
+
+        qos = QoSProfile(
+            reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.VOLATILE,
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+        )
+        # raw=True: callback receives CDR bytes instead of a deserialized object.
+        # This bypasses rmw_cyclonedds trying to read video360p/video180p fields
+        # that the Go2 does not actually send, which was silently dropping IDR frames.
+        self.create_subscription(
+            Go2FrontVideoData,
+            '/frontvideostream',
+            self._video_callback,
+            qos,
+            raw=True,
+        )
+        self.get_logger().info('Subscribed to /frontvideostream (raw CDR mode)')
+
+    def _start_pipeline(self):
+        gs_ip = self.get_parameter('gs_ip').value
+        gs_port = self.get_parameter('gs_port').value
+        framerate = self.get_parameter('framerate').value
+        fec_percentage = self.get_parameter('fec_percentage').value
+
+        self.frame_duration = Gst.SECOND // framerate
+        self.pts = 0
 
         pipeline_str = (
             f'appsrc name=src is-live=true block=false format=time '
@@ -58,7 +70,7 @@ class FrontVideoRelay:
             f'rtpulpfecenc percentage={fec_percentage} ! '
             f'udpsink host={gs_ip} port={gs_port} sync=false'
         )
-        print(f'Pipeline: {pipeline_str}', flush=True)
+        self.get_logger().info(f'Launching pipeline:\n{pipeline_str}')
 
         self.pipeline = Gst.parse_launch(pipeline_str)
         self.appsrc = self.pipeline.get_by_name('src')
@@ -67,40 +79,33 @@ class FrontVideoRelay:
         self.bus.add_signal_watch()
         self.bus.connect('message', self._on_gst_message)
 
-        self.pipeline.set_state(Gst.State.PLAYING)
+        ret = self.pipeline.set_state(Gst.State.PLAYING)
+        if ret == Gst.StateChangeReturn.FAILURE:
+            raise RuntimeError('Unable to set pipeline to PLAYING')
+
         self.loop = GLib.MainLoop()
         self.gst_thread = threading.Thread(target=self.loop.run, daemon=True)
         self.gst_thread.start()
-        print('GStreamer pipeline running', flush=True)
+        self.get_logger().info('Pipeline running.')
 
-    def _on_gst_message(self, bus, message):
-        t = message.type
-        if t == Gst.MessageType.ERROR:
-            err, debug = message.parse_error()
-            print(f'GStreamer error: {err}', file=sys.stderr, flush=True)
-            print(f'Debug: {debug}', file=sys.stderr, flush=True)
-            self.loop.quit()
-        elif t == Gst.MessageType.EOS:
-            print('GStreamer EOS', flush=True)
-            self.loop.quit()
-        elif t == Gst.MessageType.WARNING:
-            warn, _ = message.parse_warning()
-            print(f'GStreamer warning: {warn}', flush=True)
-        return True
-
-    def push(self, raw: bytes):
-        start = raw.find(H264_START)
+    def _video_callback(self, raw_msg):
+        # raw_msg is the raw CDR-serialized bytes of the DDS message.
+        # Scan for the H264 Annex-B start code — everything from there onward
+        # is one H264 NAL unit.
+        data = bytes(raw_msg)
+        start = data.find(H264_START)
         if start < 0:
             return
-        data = raw[start:]
+        data = data[start:]
         if len(data) < 5:
             return
 
         self._nal_count += 1
         if self._nal_count <= 10 or self._nal_count % 150 == 0:
             nal_type = data[4] & 0x1F
-            print(f'NAL {self._nal_count}: {len(data)}B type={nal_type} '
-                  f'(0x{data[4]:02x})', flush=True)
+            self.get_logger().info(
+                f'NAL {self._nal_count}: {len(data)}B type={nal_type} (0x{data[4]:02x})'
+            )
 
         buf = Gst.Buffer.new_allocate(None, len(data), None)
         buf.fill(0, data)
@@ -109,9 +114,24 @@ class FrontVideoRelay:
         self.pts += self.frame_duration
         ret = self.appsrc.emit('push-buffer', buf)
         if ret != Gst.FlowReturn.OK:
-            print(f'appsrc push-buffer: {ret}', file=sys.stderr, flush=True)
+            self.get_logger().warn(f'appsrc push-buffer: {ret}')
 
-    def stop(self):
+    def _on_gst_message(self, bus, message):
+        t = message.type
+        if t == Gst.MessageType.ERROR:
+            err, debug = message.parse_error()
+            self.get_logger().error(f'GStreamer error: {err}')
+            self.get_logger().error(f'Debug: {debug}')
+            self.loop.quit()
+        elif t == Gst.MessageType.EOS:
+            self.get_logger().warn('GStreamer EOS.')
+            self.loop.quit()
+        elif t == Gst.MessageType.WARNING:
+            warn, _ = message.parse_warning()
+            self.get_logger().warn(f'GStreamer warning: {warn}')
+        return True
+
+    def stop_pipeline(self):
         if self.pipeline:
             self.pipeline.set_state(Gst.State.NULL)
             self.pipeline = None
@@ -124,45 +144,17 @@ class FrontVideoRelay:
             self.gst_thread = None
 
 
-def main():
-    import os
-    gs_ip = os.environ.get('GS_IP', '192.168.123.100')
-    gs_port = int(os.environ.get('GS_PORT', '42074'))
-    framerate = int(os.environ.get('FRAMERATE', '30'))
-    fec_pct = int(os.environ.get('FEC_PCT', '30'))
-    # ROS2 topic /frontvideostream → DDS topic rt/frontvideostream
-    dds_topic_name = os.environ.get('VIDEO_TOPIC', 'rt/frontvideostream')
-
-    relay = FrontVideoRelay(gs_ip, gs_port, framerate, fec_pct)
-
-    qos = Qos(
-        Policy.Reliability.Reliable(),
-        Policy.Durability.Volatile,
-        Policy.History.KeepLast(1),
-    )
-
-    dp = DomainParticipant(0)
-    topic = Topic(dp, dds_topic_name, Go2FrontVideoData, qos=qos)
-    reader = DataReader(dp, topic, qos=qos)
-
-    print(f'Subscribed to {dds_topic_name}', flush=True)
-
-    condition = ReadCondition(
-        reader,
-        ViewState.Any | InstanceState.Any | SampleState.NotRead,
-    )
-    waitset = WaitSet(dp)
-    waitset.attach(condition)
-
+def main(args=None):
+    rclpy.init(args=args)
+    node = FrontVideoTranscodeNode()
     try:
-        while True:
-            waitset.wait(1.0)
-            for sample in reader.take(condition=condition):
-                relay.push(bytes(sample.video720p))
+        rclpy.spin(node)
     except KeyboardInterrupt:
-        print('Shutting down.', flush=True)
+        node.get_logger().info('Shutting down.')
     finally:
-        relay.stop()
+        node.stop_pipeline()
+        node.destroy_node()
+        rclpy.shutdown()
 
 
 if __name__ == '__main__':
