@@ -6,7 +6,6 @@ from rclpy.node import Node
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
 
 from unitree_go.msg import Go2FrontVideoData
-from std_msgs.msg import String
 
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst, GLib
@@ -30,6 +29,8 @@ class FrontVideoTranscodeNode(Node):
         self.loop = None
         self.gst_thread = None
         self._nal_count = 0
+        self._sps = None
+        self._pps = None
 
         self._start_pipeline()
 
@@ -50,20 +51,6 @@ class FrontVideoTranscodeNode(Node):
             raw=True,
         )
         self.get_logger().info('Subscribed to /frontvideostream (raw CDR mode)')
-
-        # Publish to videohub/inner to trigger a fresh 720p stream with SPS+PPS+IDR.
-        # The phone app does the same when it launches ({"1080p":"on"}).
-        # Use a short one-shot timer so the subscription is fully set up before the
-        # trigger fires and the encoder restarts.
-        self._videohub_pub = self.create_publisher(String, '/videohub/inner', 1)
-        self._videohub_timer = self.create_timer(0.2, self._trigger_video_restart)
-
-    def _trigger_video_restart(self):
-        self._videohub_timer.cancel()
-        msg = String()
-        msg.data = '{"720p":"on"}'
-        self._videohub_pub.publish(msg)
-        self.get_logger().info('Sent videohub trigger: {"720p":"on"}')
 
     def _start_pipeline(self):
         gs_ip = self.get_parameter('gs_ip').value
@@ -123,9 +110,40 @@ class FrontVideoTranscodeNode(Node):
                 f'buf {self._nal_count}: {len(data)}B NAL types={nal_types}'
             )
 
+        # Cache any SPS/PPS the Go2 emits (only at camera boot).
+        # Re-inject them before every IDR if we ever get one.
+        nals = self._split_nals(data)
+        for nal in nals:
+            nal_type = nal[4] & 0x1F
+            if nal_type == 7:
+                if self._sps != nal:
+                    self._sps = nal
+                    self.get_logger().info(f'Captured SPS ({len(nal)}B)')
+            elif nal_type == 8:
+                if self._pps != nal:
+                    self._pps = nal
+                    self.get_logger().info(f'Captured PPS ({len(nal)}B)')
+            elif nal_type == 5 and self._sps and self._pps:
+                # IDR arrived — prepend SPS+PPS so decoder (re)initialises cleanly
+                data = self._sps + self._pps + data
+
+        self._push(data)
+
+    def _split_nals(self, data):
+        nals = []
+        pos = 0
+        while True:
+            idx = data.find(H264_START, pos)
+            if idx < 0:
+                break
+            next_idx = data.find(H264_START, idx + 4)
+            nals.append(data[idx: next_idx] if next_idx >= 0 else data[idx:])
+            pos = idx + 4
+        return nals
+
+    def _push(self, data):
         buf = Gst.Buffer.new_allocate(None, len(data), None)
         buf.fill(0, data)
-        # do-timestamp=true on appsrc handles PTS from the pipeline clock
         ret = self.appsrc.emit('push-buffer', buf)
         if ret != Gst.FlowReturn.OK:
             self.get_logger().warn(f'appsrc push-buffer: {ret}')
