@@ -57,7 +57,7 @@ class FrontVideoTranscodeNode(Node):
 
         pipeline_str = (
             f'appsrc name=src is-live=true block=false format=time '
-            f'caps=video/x-h264,stream-format=byte-stream,alignment=au ! '
+            f'caps=video/x-h264,stream-format=byte-stream,alignment=nal ! '
             f'h264parse ! '
             f'rtph264pay config-interval=1 ! '
             f'rtpulpfecenc percentage={fec_percentage} ! '
@@ -98,11 +98,16 @@ class FrontVideoTranscodeNode(Node):
         data = bytes(msg.video720p)
         if not data:
             return
+        # Strip the 5-byte Unitree metadata header to reach the 00 00 00 01 start code
+        start = data.find(b'\x00\x00\x00\x01')
+        if start < 0:
+            return
+        data = data[start:]
+
         self._frame_count += 1
         if self._frame_count <= 5:
             self.get_logger().info(
-                f'frame {self._frame_count}: video720p={len(data)}B '
-                f'first_bytes={data[:16].hex()}'
+                f'nal {self._frame_count}: {len(data)}B nal_type=0x{data[4]:02x}'
             )
         buf = Gst.Buffer.new_allocate(None, len(data), None)
         buf.fill(0, data)
