@@ -99,10 +99,10 @@ class FrontVideoTranscodeNode(Node):
         if not data:
             return
         self._frame_count += 1
-        if self._frame_count <= 5 or self._frame_count % 30 == 0:
+        if self._frame_count <= 5:
             self.get_logger().info(
                 f'frame {self._frame_count}: video720p={len(data)}B '
-                f'video360p={len(msg.video360p)}B video180p={len(msg.video180p)}B'
+                f'first_bytes={data[:16].hex()}'
             )
         buf = Gst.Buffer.new_allocate(None, len(data), None)
         buf.fill(0, data)
