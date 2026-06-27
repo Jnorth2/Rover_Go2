@@ -1,10 +1,13 @@
-# Front Camera H265 Transcode Pipeline
+# Front Camera Video Pipeline
 
 ## Goal
 
-Receive the Go2's front camera H264 stream from the `frontvideofeed` DDS topic,
-transcode to H265 on the Jetson Orin Nano using hardware encoder/decoder (NVDEC/NVENC),
-and stream the result as RTP/UDP to the groundstation.
+Receive the Go2's front camera H264 stream from the `frontvideofeed` DDS topic
+and forward it as RTP H264 over UDP to the groundstation.
+
+**Note:** H265 transcoding was the original goal but the Jetson has no hardware video
+encoder available (`nvv4l2*` GStreamer plugins not installed — only `nvjpegenc` is present).
+Software H265 encode (x265) would hammer the CPU. H264 passthrough is zero overhead.
 
 ## What We Know About `frontvideofeed`
 

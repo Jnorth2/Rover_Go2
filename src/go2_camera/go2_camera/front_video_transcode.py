@@ -17,11 +17,9 @@ class FrontVideoTranscodeNode(Node):
     def __init__(self):
         super().__init__('front_video_transcode')
 
-        self.declare_parameter('gs_ip', '192.168.1.100')
+        self.declare_parameter('gs_ip', '192.168.123.100')
         self.declare_parameter('gs_port', 42074)
         self.declare_parameter('framerate', 30)
-        self.declare_parameter('preset_level', 1)
-        self.declare_parameter('bitrate', 2000000)
         self.declare_parameter('fec_percentage', 30)
 
         self.pipeline = None
@@ -51,8 +49,6 @@ class FrontVideoTranscodeNode(Node):
         gs_ip = self.get_parameter('gs_ip').value
         gs_port = self.get_parameter('gs_port').value
         framerate = self.get_parameter('framerate').value
-        preset_level = self.get_parameter('preset_level').value
-        bitrate = self.get_parameter('bitrate').value
         fec_percentage = self.get_parameter('fec_percentage').value
 
         self.frame_duration = Gst.SECOND // framerate
@@ -63,12 +59,7 @@ class FrontVideoTranscodeNode(Node):
             f'caps=video/x-h264,stream-format=byte-stream,alignment=au,'
             f'width=1280,height=720,framerate={framerate}/1 ! '
             f'h264parse ! '
-            f'nvv4l2decoder ! '
-            f'nvvidconv ! '
-            f'video/x-raw(memory:NVMM),format=NV12 ! '
-            f'nvv4l2h265enc preset-level={preset_level} bitrate={bitrate} ! '
-            f'h265parse ! '
-            f'rtph265pay config-interval=1 ! '
+            f'rtph264pay config-interval=1 ! '
             f'rtpulpfecenc percentage={fec_percentage} ! '
             f'udpsink host={gs_ip} port={gs_port} sync=false'
         )
