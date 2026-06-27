@@ -28,6 +28,7 @@ class FrontVideoTranscodeNode(Node):
         self.gst_thread = None
         self.pts = 0
         self.frame_duration = 0
+        self._frame_count = 0
 
         self.start_pipeline()
 
@@ -39,11 +40,11 @@ class FrontVideoTranscodeNode(Node):
         )
         self.subscription = self.create_subscription(
             Go2FrontVideoData,
-            '/frontvideofeed',
+            '/frontvideostream',
             self.video_callback,
             qos,
         )
-        self.get_logger().info('Subscribed to /frontvideofeed')
+        self.get_logger().info('Subscribed to /frontvideostream')
 
     def start_pipeline(self):
         gs_ip = self.get_parameter('gs_ip').value
@@ -56,8 +57,7 @@ class FrontVideoTranscodeNode(Node):
 
         pipeline_str = (
             f'appsrc name=src is-live=true block=false format=time '
-            f'caps=video/x-h264,stream-format=byte-stream,alignment=au,'
-            f'width=1280,height=720,framerate={framerate}/1 ! '
+            f'caps=video/x-h264,stream-format=byte-stream,alignment=au ! '
             f'h264parse ! '
             f'rtph264pay config-interval=1 ! '
             f'rtpulpfecenc percentage={fec_percentage} ! '
@@ -98,6 +98,12 @@ class FrontVideoTranscodeNode(Node):
         data = bytes(msg.video720p)
         if not data:
             return
+        self._frame_count += 1
+        if self._frame_count <= 5 or self._frame_count % 30 == 0:
+            self.get_logger().info(
+                f'frame {self._frame_count}: video720p={len(data)}B '
+                f'video360p={len(msg.video360p)}B video180p={len(msg.video180p)}B'
+            )
         buf = Gst.Buffer.new_allocate(None, len(data), None)
         buf.fill(0, data)
         buf.pts = self.pts
