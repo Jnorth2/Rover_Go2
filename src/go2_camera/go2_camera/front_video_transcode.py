@@ -21,7 +21,6 @@ class FrontVideoTranscodeNode(Node):
 
         self.declare_parameter('gs_ip', '192.168.123.100')
         self.declare_parameter('gs_port', 42074)
-        self.declare_parameter('framerate', 30)
         self.declare_parameter('fec_percentage', 30)
 
         self.pipeline = None
@@ -29,8 +28,6 @@ class FrontVideoTranscodeNode(Node):
         self.bus = None
         self.loop = None
         self.gst_thread = None
-        self.pts = 0
-        self.frame_duration = 0
         self._nal_count = 0
 
         self._start_pipeline()
@@ -56,14 +53,10 @@ class FrontVideoTranscodeNode(Node):
     def _start_pipeline(self):
         gs_ip = self.get_parameter('gs_ip').value
         gs_port = self.get_parameter('gs_port').value
-        framerate = self.get_parameter('framerate').value
         fec_percentage = self.get_parameter('fec_percentage').value
 
-        self.frame_duration = Gst.SECOND // framerate
-        self.pts = 0
-
         pipeline_str = (
-            f'appsrc name=src is-live=true block=false format=time '
+            f'appsrc name=src is-live=true do-timestamp=true block=false format=time '
             f'caps=video/x-h264,stream-format=byte-stream,alignment=nal ! '
             f'h264parse ! '
             f'rtph264pay config-interval=1 ! '
@@ -102,16 +95,22 @@ class FrontVideoTranscodeNode(Node):
 
         self._nal_count += 1
         if self._nal_count <= 10 or self._nal_count % 150 == 0:
-            nal_type = data[4] & 0x1F
+            # Find all NAL types in this buffer
+            pos = 0
+            nal_types = []
+            while True:
+                idx = data.find(H264_START, pos)
+                if idx < 0 or idx + 5 > len(data):
+                    break
+                nal_types.append(data[idx + 4] & 0x1F)
+                pos = idx + 4
             self.get_logger().info(
-                f'NAL {self._nal_count}: {len(data)}B type={nal_type} (0x{data[4]:02x})'
+                f'buf {self._nal_count}: {len(data)}B NAL types={nal_types}'
             )
 
         buf = Gst.Buffer.new_allocate(None, len(data), None)
         buf.fill(0, data)
-        buf.pts = self.pts
-        buf.duration = self.frame_duration
-        self.pts += self.frame_duration
+        # do-timestamp=true on appsrc handles PTS from the pipeline clock
         ret = self.appsrc.emit('push-buffer', buf)
         if ret != Gst.FlowReturn.OK:
             self.get_logger().warn(f'appsrc push-buffer: {ret}')
