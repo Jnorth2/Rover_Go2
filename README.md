@@ -22,7 +22,10 @@ republishes them as a normal ROS2 node. The bridge then discovers and routes
 those publishers over Zenoh.
 
 ## GO2 Setup
-The go2 is jailbroken and updated to 1.11. SSH can be achieved through `ssh 
+The go2 is jailbroken and updated to 1.11. SSH can be achieved for wired connections as specified below:
+```bash
+ssh root@192.168.123.161
+```
 
 ## Jetson Orin setup
 

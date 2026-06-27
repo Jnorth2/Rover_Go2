@@ -29,6 +29,7 @@ setup(
         'camera_capture = go2_camera.camera_capture:main',
         'camera_muxing = go2_camera.camera_muxing:main',
         'camera_ros2_conversion = go2_camera.camera_ros2_conversion:main',
+        'front_video_transcode = go2_camera.front_video_transcode:main',
         ],
     },
 )
