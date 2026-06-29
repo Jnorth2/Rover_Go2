@@ -4,12 +4,17 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Joy
 from unitree_api.msg import Request
+from unitree_go.msg import SportModeState
 
 # API IDs from ros2_sport_client.h
+_API_BALANCE_STAND = 1002
 _API_MOVE = 1008
-_API_STOPMOVE = 1003
 _API_STANDUP = 1004
 _API_STANDDOWN = 1005
+
+# Sport mode values from SportModeState.mode
+_MODE_IDLE = 0
+_MODE_BALANCE_STAND = 1
 
 # PS4/5 axis indices (joy_linux defaults)
 #   axes[0]  left stick X  (+1=left,  -1=right)
@@ -36,15 +41,30 @@ class Go2JoyTeleop(Node):
         self.declare_parameter('deadzone', _DEADZONE)
 
         self._pub = self.create_publisher(Request, '/api/sport/request', 10)
-        self._sub = self.create_subscription(Joy, '/joy', self._joy_cb, 10)
+        self._joy_sub = self.create_subscription(Joy, '/joy', self._joy_cb, 10)
+        self._state_sub = self.create_subscription(
+            SportModeState, '/lf/sportmodestate', self._state_cb, 10)
         self._timer = self.create_timer(0.05, self._tick)  # 20 Hz
 
         self._joy: Joy | None = None
+        self._robot_mode: int = _MODE_IDLE
         self._is_sitting = False
         self._prev_btn = 0
+        # After StandUp, wait for the animation then send BalanceStand once
+        self._pending_balance_stand = False
 
     def _joy_cb(self, msg: Joy):
         self._joy = msg
+
+    def _state_cb(self, msg: SportModeState):
+        prev = self._robot_mode
+        self._robot_mode = msg.mode
+
+        # Robot finished standing up (transitioned out of idle after StandUp)
+        if self._pending_balance_stand and prev == _MODE_IDLE and self._robot_mode != _MODE_IDLE:
+            self._pending_balance_stand = False
+            self._send_api(_API_BALANCE_STAND)
+            self.get_logger().info('Entered balance stand mode')
 
     def _tick(self):
         if self._joy is None:
@@ -58,7 +78,7 @@ class Go2JoyTeleop(Node):
             self._toggle_sit_stand()
         self._prev_btn = btn
 
-        if not self._is_sitting:
+        if not self._is_sitting and self._robot_mode == _MODE_BALANCE_STAND:
             ax_vx = self.get_parameter('axis_vx').value
             ax_vy = self.get_parameter('axis_vy').value
             ax_vyaw = self.get_parameter('axis_vyaw').value
@@ -73,21 +93,26 @@ class Go2JoyTeleop(Node):
             self._send_move(vx, vy, vyaw)
 
     def _toggle_sit_stand(self):
-        req = Request()
         if self._is_sitting:
-            req.header.identity.api_id = _API_STANDUP
+            self._send_api(_API_STANDUP)
             self._is_sitting = False
-            self.get_logger().info('Standing up')
+            self._pending_balance_stand = True
+            self.get_logger().info('Standing up — waiting for balance stand')
         else:
-            req.header.identity.api_id = _API_STANDDOWN
+            self._send_api(_API_STANDDOWN)
             self._is_sitting = True
+            self._pending_balance_stand = False
             self.get_logger().info('Standing down')
-        self._pub.publish(req)
 
     def _send_move(self, vx: float, vy: float, vyaw: float):
         req = Request()
         req.header.identity.api_id = _API_MOVE
         req.parameter = json.dumps({'x': vx, 'y': vy, 'z': vyaw})
+        self._pub.publish(req)
+
+    def _send_api(self, api_id: int):
+        req = Request()
+        req.header.identity.api_id = api_id
         self._pub.publish(req)
 
     @staticmethod

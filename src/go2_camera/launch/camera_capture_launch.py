@@ -20,12 +20,8 @@ def generate_launch_description():
             "camera_name": "d435",
             "serial_no":"238722072340",
 
-            "depth_width": 1280,
-            "depth_height": 720,
-            "color_width": 1920,
-            "color_height": 1080,
-            "depth_fps": 30,
-            "rgb_fps": 30,
+            "depth_module.depth_profile": "848x480x30",
+            "rgb_camera.color_profile": "1280x720x30",
             #enable streams
             "enable_color": True,
             "enable_depth": True,
