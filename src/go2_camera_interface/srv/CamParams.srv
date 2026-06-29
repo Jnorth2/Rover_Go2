@@ -1,4 +1,4 @@
-uint8 preset_level
+uint8 speed_preset
 uint64 bitrate
 int16 stream_width
 int16 stream_height

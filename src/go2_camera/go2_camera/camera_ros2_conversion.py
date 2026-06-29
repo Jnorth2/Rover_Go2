@@ -26,8 +26,8 @@ class CameraCaptureNode(Node):
         self.declare_parameter('cap_width', 640)
         self.declare_parameter('cap_height', 480)
         self.declare_parameter('cap_framerate', 30)
-        self.declare_parameter('preset_level', 1)
-        self.declare_parameter('bitrate', 4000000)
+        self.declare_parameter('speed_preset', 'ultrafast')
+        self.declare_parameter('bitrate', 4000)
         self.declare_parameter('stream_width', 640)
         self.declare_parameter('stream_height', 480)
         self.declare_parameter('fec_percentage', 30)
@@ -64,7 +64,7 @@ class CameraCaptureNode(Node):
     def cam_params_callback(self, request, response):
         self.get_logger().info("CamParams service received, updating pipeline...")
         self.set_parameters([
-            self.get_parameter_or('preset_level', request.preset_level),
+            self.get_parameter_or('speed_preset', request.speed_preset),
             self.get_parameter_or('bitrate', request.bitrate),
             self.get_parameter_or('stream_width', request.stream_width),
             self.get_parameter_or('stream_height', request.stream_height),
@@ -84,7 +84,7 @@ class CameraCaptureNode(Node):
         cap_width      = self.get_parameter('cap_width').value
         cap_height     = self.get_parameter('cap_height').value
         cap_framerate  = self.get_parameter('cap_framerate').value
-        preset_level   = self.get_parameter('preset_level').value
+        speed_preset   = self.get_parameter('speed_preset').value
         bitrate        = self.get_parameter('bitrate').value
         stream_width   = self.get_parameter('stream_width').value
         stream_height  = self.get_parameter('stream_height').value
@@ -105,9 +105,8 @@ class CameraCaptureNode(Node):
             f'rtpvrawpay ! udpsink host=127.0.0.1 port={mux_port} sync=false async=false '
             f't. ! queue max-size-buffers=2 max-size-bytes=0 max-size-time=0 leaky=downstream ! '
             f'videoscale ! video/x-raw,width={stream_width},height={stream_height} ! '
-            f'nvvidconv ! video/x-raw(memory:NVMM),format=NV12 ! '
-            f'nvv4l2h265enc preset-level={preset_level} bitrate={bitrate} ! '
-            f'h265parse ! rtph265pay config-interval=1 ! '
+            f'x264enc tune=zerolatency speed-preset={speed_preset} bitrate={bitrate} ! '
+            f'h264parse ! rtph264pay config-interval=1 ! '
             f'rtpulpfecenc percentage={fec_percentage} ! '
             f'udpsink host={udp_host} port={udp_port} sync=false'
         )

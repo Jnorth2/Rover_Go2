@@ -18,24 +18,48 @@ def generate_launch_description():
         name='d435',
         parameters=[{
             "camera_name": "d435",
+            "serial_no":"238722072340",
+
             "depth_width": 1280,
             "depth_height": 720,
-            "color_width": 1280,
-            "color_height": 720,
+            "color_width": 1920,
+            "color_height": 1080,
+            "depth_fps": 30,
+            "rgb_fps": 30,
+            #enable streams
+            "enable_color": True,
+            "enable_depth": True,
+            "enable_accel": True,
+            "enable_gyro": True,
+            "enable_infra1": False,
+            "enable_infra2": False,
+            "enable_rgbd": True,
+
+            "enable_sync": True,
+
+            #Point cloud
             "pointcloud.enable": True,
             "pointcloud__neon_.enable": True,
             "pointcloud__neon_.stream_filter": 2,
+            "pointcloud.stream_filter": 2,
             "align_depth.enable": True,
-            #"enable_rgbd": True,
+            #Decimation Filter
             "decimation_filter": True,
             "decimation_filter.filter_magnitude": 2,
-            "enable_sync": True,
-            "pointcloud.stream_filter": 2,
-            "enable_color": True,
-            # "enable_depth": True,
-            # "serial_no":"218622273613",
-            "depth_fps": 30,
-            "rgb_fps": 30,
+            #spacial Filter
+            "spatial_filter.enable": True,
+            "spatial_filter.filter_magnitude": 2,
+            "spatial_filter.filter_smooth_alpha": 0.55,
+            "spatial_filter.filter_smooth_delta": 30,
+            "spatial_filter.holes_fill": 1,   # 1 = small/conservative hole fill
+            "spatial_filter.frames_queue_size": 16,
+            #temporal Filter
+            "temporal_filter.enable": True,
+            "temporal_filter.filter_smooth_alpha": 0.45,
+            "temporal_filter.filter_smooth_delta": 25,
+            "temporal_filter.holes_fill": 0,  # low persistence; use 0 if moving fast
+            "temporal_filter.frames_queue_size": 16,
+
         }],
         output='screen',
     )
@@ -69,13 +93,13 @@ def generate_launch_description():
         name='realsense_conversion',
         parameters=[{
             'image_topic': '/camera/d435/color/image_raw',
-            'cap_width': 1280,
-            'cap_height': 720,
+            'cap_width': 1920,
+            'cap_height': 1080,
             'cap_framerate': 30,
-            'preset_level': 1,
-            'bitrate': 4000000,
-            'stream_width': 1280,
-            'stream_height': 720,
+            'speed_preset': 'ultrafast',
+            'bitrate': 4000,
+            'stream_width': 1920,
+            'stream_height': 1080,
             'fec_percentage': 30,
             'udp_host': ARM_IP,
             'udp_port': 42074,
