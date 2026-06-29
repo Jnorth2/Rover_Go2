@@ -105,7 +105,7 @@ class CameraCaptureNode(Node):
             f'rtpvrawpay ! udpsink host=127.0.0.1 port={mux_port} sync=false async=false '
             f't. ! queue max-size-buffers=2 max-size-bytes=0 max-size-time=0 leaky=downstream ! '
             f'videoscale ! video/x-raw,width={stream_width},height={stream_height} ! '
-            f'x264enc tune=zerolatency speed-preset={speed_preset} bitrate={bitrate} ! '
+            f'x264enc tune=zerolatency speed-preset={speed_preset} bitrate={bitrate} key-int-max={cap_framerate} ! '
             f'h264parse ! rtph264pay config-interval=1 ! '
             f'rtpulpfecenc percentage={fec_percentage} ! '
             f'udpsink host={udp_host} port={udp_port} sync=false'
