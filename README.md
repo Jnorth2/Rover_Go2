@@ -102,6 +102,64 @@ sudo rm /etc/zenoh/go2_relay.py
 sudo systemctl daemon-reload
 ```
 
+## Joystick control (PS4 / DualSense)
+
+A PlayStation controller connected to the groundstation drives the Go2 over the
+existing Zenoh ROS2 link.
+
+```
+Groundstation joy_node  →  /joy  →  (Zenoh)  →  Orin go2_joy_teleop  →  /api/sport/request
+```
+
+### Controller mapping
+
+| Input | Action |
+|-------|--------|
+| Left stick — up / down | Forward / backward |
+| Left stick — left / right | Strafe left / right |
+| Right stick — left / right | Turn left / right |
+| **□ Square** | Toggle sit / stand |
+
+### Running joystick control
+
+**Groundstation** — plug in the controller, then:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+ros2 launch /home/jn2-alt/Rover_Go2/groundstation/launch/joy_launch.py
+```
+
+**Orin** — in a sourced workspace terminal:
+
+```bash
+ros2 launch go2_control go2_joy_launch.py
+```
+
+Both sides must see each other's topics (Zenoh routers running, sourced with
+`rmw_zenoh_cpp`).
+
+### Tuning
+
+All limits and axis assignments are ROS2 parameters. Override at launch:
+
+```bash
+ros2 launch go2_control go2_joy_launch.py max_linear:=1.2 max_angular:=1.5
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `axis_vx` | `1` | Axis index for forward / backward |
+| `axis_vy` | `0` | Axis index for strafe |
+| `axis_vyaw` | `3` | Axis index for yaw (turn) |
+| `btn_sit_stand` | `3` | Button index for sit / stand toggle |
+| `max_linear` | `0.8` | Max linear speed (m/s) |
+| `max_angular` | `1.0` | Max yaw rate (rad/s) |
+| `deadzone` | `0.08` | Stick deadzone |
+
+Axis indices follow the `joy_linux` driver defaults for DS4 / DualSense.
+If your controller maps differently run `ros2 topic echo /joy` and check the
+indices while moving each stick.
+
 ## Groundstation laptop setup
 
 See [groundstation/README.md](groundstation/README.md) for full instructions.
@@ -156,3 +214,11 @@ Zenoh port       7447             (TCP, both sides)
 | `zenoh-groundstation-router.service` | Systemd unit for groundstation router |
 | `run-zenoh-router.sh` | Manual router launcher |
 | `ros2-local.sh` | Sets RMW_IMPLEMENTATION=rmw_zenoh_cpp + ZENOH_ROUTER_CONFIG_URI |
+| `launch/joy_launch.py` | Starts joy_node for PS4 / DualSense controller input |
+
+### src/go2_control/
+
+| File | Purpose |
+|------|---------|
+| `scripts/joy_teleop.py` | Translates `/joy` messages to Go2 sport API commands |
+| `launch/go2_joy_launch.py` | Launches `joy_teleop.py` with default parameters |

@@ -125,6 +125,26 @@ Jetson's `zenoh-bridge-ros2dds` is running and that it can see Go2 DDS topics
 via CycloneDDS. A fresh `ros2 daemon stop` before listing is usually required
 after sourcing a new environment.
 
+## Joystick teleop
+
+Plug in a PS4 or DualSense controller via USB or Bluetooth before launching.
+
+```bash
+# Verify the kernel sees the controller
+ls /dev/input/js*
+
+# Start the joy node (auto-detects the first controller)
+source /opt/ros/jazzy/setup.bash
+ros2 launch launch/joy_launch.py
+```
+
+The node publishes to `/joy`. The `go2_joy_teleop` node on the Orin subscribes
+and translates stick positions into `/api/sport/request` sport API commands.
+
+Controller axes are printed by running `ros2 topic echo /joy` and moving each
+stick. If the Go2 moves in the wrong direction negate the relevant parameter on
+the Orin launch side (`axis_vx`, `axis_vy`, `axis_vyaw`).
+
 ## Files
 
 - `router.json5` — groundstation router; connects to Jetson, listens on :7447
@@ -132,6 +152,7 @@ after sourcing a new environment.
 - `zenoh-groundstation-router.service` — systemd unit for automatic router startup
 - `run-zenoh-router.sh` — manual router launcher
 - `ros2-local.sh` — sets `RMW_IMPLEMENTATION=rmw_zenoh_cpp` and `ZENOH_ROUTER_CONFIG_URI`
+- `launch/joy_launch.py` — starts `joy_node` for PS4 / DualSense controller input
 
 ### Legacy: groundstation ROS2DDS bridge
 
