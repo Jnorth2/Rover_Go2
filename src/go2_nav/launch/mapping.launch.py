@@ -15,8 +15,8 @@ def generate_launch_description():
             description='Use simulation clock',
         ),
         DeclareLaunchArgument(
-            'scan_cloud_topic', default_value='/utlidar/cloud_deskewed',
-            description='LiDAR point cloud topic. Use /utlidar/cloud if deskewed is unavailable.',
+            'scan_cloud_topic', default_value='/utlidar/cloud',
+            description='LiDAR point cloud topic. Switch to /utlidar/cloud_deskewed if it starts publishing.',
         ),
         DeclareLaunchArgument(
             'use_rviz', default_value='false',
