@@ -83,7 +83,7 @@ def generate_launch_description():
             executable='rtabmap',
             name='rtabmap',
             output='screen',
-            arguments=['--delete-db-on-start'],
+            arguments=['--delete_db_on_start'],
             parameters=rtabmap_params,
             remappings=rtabmap_remaps,
             condition=IfCondition(LaunchConfiguration('delete_db_on_start')),
