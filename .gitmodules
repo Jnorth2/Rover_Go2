@@ -1,3 +1,3 @@
-[submodule "src/Sayantani_go2"]
-	path = src/Sayantani_go2
-	url = git@github.com:Sayantani-Bhattacharya/unitree_go2_nav.git
+[submodule "src/Sayantani_unitree_go2_nav"]
+	path = src/Sayantani_unitree_go2_nav
+	url = git@github.com:Jnorth2/Sayantani_unitree_go2_nav.git
