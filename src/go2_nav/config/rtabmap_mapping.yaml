@@ -47,6 +47,12 @@ rtabmap:
     RGBD/ProximityPathMaxNeighbors: "1"
     Reg/Force3DoF: "true"
 
+    # Disable visual feature extraction — no camera in lidar-only SLAM mode.
+    # Without this, RTAB-Map tries and fails to extract bag-of-words features
+    # from each scan node, spamming "Missing visual features" warnings and wasting
+    # ~10 ms per frame. Loop closure is handled entirely by ICP proximity detection.
+    Vis/MaxFeatures: "0"
+
     # Always generate an occupancy grid per node so the map can be reconstructed
     # from the database on re-launch without re-scanning the environment.
     RGBD/CreateOccupancyGrid: "true"
