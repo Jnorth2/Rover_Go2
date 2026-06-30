@@ -9,13 +9,15 @@ def generate_launch_description():
     """
     Groundstation-only launch: starts RViz to visualize the mapping stack
     running on the robot. Requires DDS network connectivity to the Jetson.
-    No robot-side nodes are started here.
+
+    Uses groundstation_mapping.rviz which has no RobotModel display (avoids
+    needing go2_description meshes installed on the groundstation machine).
     """
     return LaunchDescription([
         DeclareLaunchArgument(
             'rviz_config',
             default_value=PathJoinSubstitution([
-                FindPackageShare('go2_nav'), 'config', 'mapping.rviz',
+                FindPackageShare('go2_nav'), 'config', 'groundstation_mapping.rviz',
             ]),
             description='Path to RViz config file',
         ),

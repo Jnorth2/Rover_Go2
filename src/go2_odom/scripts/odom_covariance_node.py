@@ -42,7 +42,11 @@ class OdomCovarianceNode(Node):
 
     def _cb(self, msg: Odometry):
         out = Odometry()
-        out.header = msg.header
+        # Re-stamp to Jetson clock so the EKF and RTAB-Map approx_sync can match
+        # this odom against the cloud (which is also re-stamped). The Go2's clock
+        # is offset from the Jetson's by a fixed delta (observed ~113 s in testing).
+        out.header.stamp = self.get_clock().now().to_msg()
+        out.header.frame_id = msg.header.frame_id
         out.child_frame_id = msg.child_frame_id
         out.pose.pose = msg.pose.pose
         out.twist.twist = msg.twist.twist

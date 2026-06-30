@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """
-Republishes IMU messages with populated covariance matrices.
+Republishes IMU messages with populated covariance matrices and corrected timestamps.
 
-The Go2's UTlidar publishes sensor_msgs/Imu on /utlidar/imu with zero covariances,
-which causes robot_localization to ignore or mishandle the data. This node injects
-diagonal covariance matrices so downstream EKF nodes can process the IMU correctly.
+The Go2's UTlidar publishes sensor_msgs/Imu on /utlidar/imu with:
+  - Zero covariances (robot_localization ignores zero-covariance data)
+  - Go2 system clock timestamps (offset from the Jetson's clock by a fixed delta)
+
+This node injects diagonal covariance matrices and re-stamps to Jetson time so the
+EKF can receive all sensor inputs on a common clock.
 
 Orientation covariance_diag < 0 signals "orientation not provided" per REP-145,
 which tells robot_localization to skip orientation fusion from this source.
@@ -46,7 +49,11 @@ class ImuCovarianceNode(Node):
 
     def _cb(self, msg: Imu):
         out = Imu()
-        out.header = msg.header
+        # Re-stamp to Jetson clock so EKF inputs share a common time reference.
+        # The Go2's clock is offset from the Jetson's; without this the EKF
+        # cannot sync odom and IMU measurements correctly.
+        out.header.stamp = self.get_clock().now().to_msg()
+        out.header.frame_id = msg.header.frame_id
         out.orientation = msg.orientation
         out.angular_velocity = msg.angular_velocity
         out.linear_acceleration = msg.linear_acceleration

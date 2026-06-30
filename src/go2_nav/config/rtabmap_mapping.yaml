@@ -47,6 +47,10 @@ rtabmap:
     RGBD/ProximityPathMaxNeighbors: "1"
     Reg/Force3DoF: "true"
 
+    # Always generate an occupancy grid per node so the map can be reconstructed
+    # from the database on re-launch without re-scanning the environment.
+    RGBD/CreateOccupancyGrid: "true"
+
     # 2D occupancy grid (5 cm resolution) compatible with Nav2 map_server
     Grid/CellSize: "0.05"
     Grid/RangeMax: "20.0"

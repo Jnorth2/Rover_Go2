@@ -7,6 +7,11 @@ endif()
 
 find_package(ament_cmake REQUIRED)
 
+install(PROGRAMS
+  scripts/cloud_restamp_node.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 install(DIRECTORY launch config
   DESTINATION share/${PROJECT_NAME}
 )

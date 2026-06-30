@@ -1,13 +1,25 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
-from launch.conditions import IfCondition
+from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
+    rtabmap_params = [
+        PathJoinSubstitution([
+            FindPackageShare('go2_nav'), 'config', 'rtabmap_mapping.yaml',
+        ]),
+        {'use_sim_time': LaunchConfiguration('use_sim_time')},
+    ]
+    rtabmap_remaps = [
+        ('scan_cloud', '/utlidar/cloud_restamped'),
+        ('odom',       '/odom'),
+        ('grid_map',   '/map'),
+    ]
+
     return LaunchDescription([
         DeclareLaunchArgument(
             'use_sim_time', default_value='false',
@@ -15,13 +27,33 @@ def generate_launch_description():
             description='Use simulation clock',
         ),
         DeclareLaunchArgument(
-            'scan_cloud_topic', default_value='/utlidar/cloud',
-            description='LiDAR point cloud topic. Switch to /utlidar/cloud_deskewed if it starts publishing.',
+            'scan_cloud_topic', default_value='/utlidar/cloud_deskewed',
+            description='LiDAR point cloud topic. Switch to /utlidar/cloud if deskewed is unavailable.',
         ),
         DeclareLaunchArgument(
             'use_rviz', default_value='false',
             choices=['true', 'false'],
             description='Launch RViz (disabled by default; run groundstation_mapping.launch.py instead)',
+        ),
+        DeclareLaunchArgument(
+            'delete_db_on_start', default_value='false',
+            choices=['true', 'false'],
+            description='Delete the RTAB-Map database on startup to begin a fresh map',
+        ),
+
+        # Re-stamp the lidar cloud from Go2 clock to Jetson clock.
+        # The Go2's system clock is offset ~113 s from the Jetson's. Without this,
+        # RTAB-Map's approx_sync cannot match the cloud against EKF odometry output.
+        Node(
+            package='go2_nav',
+            executable='cloud_restamp_node.py',
+            name='cloud_restamp_node',
+            output='screen',
+            remappings=[
+                ('cloud_in',  LaunchConfiguration('scan_cloud_topic')),
+                ('cloud_out', '/utlidar/cloud_restamped'),
+            ],
+            parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
         ),
 
         # Odometry: EKF fusing /utlidar/robot_odom + UTlidar IMU → /odom + odom→base_link TF
@@ -45,25 +77,27 @@ def generate_launch_description():
             launch_arguments={'use_rviz': 'false'}.items(),
         ),
 
-        # RTAB-Map SLAM: builds 2D occupancy grid (/map) and 3D point-cloud map.
-        # Publishes map → odom TF correction.
-        # Input: /utlidar/cloud_deskewed (point cloud), /odom (EKF output)
+        # RTAB-Map SLAM (fresh map — deletes existing database on startup)
         Node(
             package='rtabmap_slam',
             executable='rtabmap',
             name='rtabmap',
             output='screen',
-            parameters=[
-                PathJoinSubstitution([
-                    FindPackageShare('go2_nav'), 'config', 'rtabmap_mapping.yaml',
-                ]),
-                {'use_sim_time': LaunchConfiguration('use_sim_time')},
-            ],
-            remappings=[
-                ('scan_cloud', LaunchConfiguration('scan_cloud_topic')),
-                ('odom',       '/odom'),
-                ('grid_map',   '/map'),
-            ],
+            arguments=['--delete-db-on-start'],
+            parameters=rtabmap_params,
+            remappings=rtabmap_remaps,
+            condition=IfCondition(LaunchConfiguration('delete_db_on_start')),
+        ),
+
+        # RTAB-Map SLAM (resume existing map from database)
+        Node(
+            package='rtabmap_slam',
+            executable='rtabmap',
+            name='rtabmap',
+            output='screen',
+            parameters=rtabmap_params,
+            remappings=rtabmap_remaps,
+            condition=UnlessCondition(LaunchConfiguration('delete_db_on_start')),
         ),
 
         # Optional: RealSense D435 visual odometry via RTAB-Map.
@@ -86,7 +120,6 @@ def generate_launch_description():
         #     ],
         # ),
 
-        # RViz2
         Node(
             package='rviz2',
             executable='rviz2',
