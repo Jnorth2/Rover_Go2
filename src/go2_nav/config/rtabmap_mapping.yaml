@@ -1,0 +1,61 @@
+rtabmap:
+  ros__parameters:
+    frame_id: "base_link"
+    odom_frame_id: "odom"
+    map_frame_id: "map"
+
+    subscribe_depth: false
+    subscribe_rgb: false
+    subscribe_scan_cloud: true
+    subscribe_odom_info: false
+
+    approx_sync: true
+    wait_for_transform: 0.3
+    sync_queue_size: 50
+    topic_queue_size: 50
+
+    # Publish map → odom correction TF
+    publish_tf: true
+
+    # Mapping mode (not localization-only)
+    Mem/IncrementalMemory: "true"
+    Mem/InitWMWithAllNodes: "false"
+    Mem/NotLinkedNodesKept: "false"
+    Mem/STMSize: "30"
+    Mem/LaserScanNormalK: "20"
+
+    # Trigger a new graph node after moving this much
+    RGBD/LinearUpdate: "0.1"
+    RGBD/AngularUpdate: "0.1"
+
+    # ICP point-cloud registration for loop closure and odometry correction
+    Reg/Strategy: "1"
+    Icp/VoxelSize: "0.1"
+    Icp/PointToPlane: "true"
+    Icp/PointToPlaneK: "20"
+    Icp/PointToPlaneRadius: "0"
+    Icp/Iterations: "10"
+    Icp/Epsilon: "0.001"
+    Icp/MaxTranslation: "3"
+    Icp/MaxCorrespondenceDistance: "1"
+    Icp/Strategy: "1"
+    Icp/OutlierRatio: "0.7"
+    Icp/CorrespondenceRatio: "0.2"
+
+    # Proximity detection via scan-cloud (finds loop closures without visual features)
+    RGBD/ProximityMaxGraphDepth: "0"
+    RGBD/ProximityPathMaxNeighbors: "1"
+    Reg/Force3DoF: "true"
+
+    # 2D occupancy grid (5 cm resolution) compatible with Nav2 map_server
+    Grid/CellSize: "0.05"
+    Grid/RangeMax: "20.0"
+    Grid/RayTracing: "true"
+    Grid/3D: "false"
+    Grid/Sensor: "1"
+    Grid/MaxObstacleHeight: "2.0"
+    Grid/MinGroundHeight: "-0.1"
+
+    # Publish the occupancy grid continuously for Nav2
+    # (rtabmap publishes /rtabmap/grid_map; remapped to /map in the launch file)
+    Grid/UpdateError: "0.01"
