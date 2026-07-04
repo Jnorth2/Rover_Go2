@@ -21,25 +21,25 @@ def generate_launch_description():
     ]
 
     rtabmap_parameters = {
-        'frame_id':'rover_base_origin',
-        'use_sim_time':True,
+        'frame_id':'base_link',
+        'use_sim_time':False,
         'subscribe_depth':False,
         'subscribe_scan_cloud': True,
-        'use_action_for_goal':True,
+        #'use_action_for_goal':True,
         'Reg/Force3DoF':'true',
-        'Grid/CellSize': "0.2",  # Voxel downsampling
+        'Grid/CellSize': "0.05",  # Voxel downsampling
         'Grid/RayTracing':'true', # Fill empty space
-        'Grid/Sensor':'0',
+        'Grid/Sensor':'1',
         'Grid/FromDepth':'False',
-        'Grid/3D': 'true', # Use 2D occupancy
-        'Grid/RangeMax':'5',
+        'Grid/3D': 'false', # Use 2D occupancy
+        'Grid/RangeMax':'20',
         'Grid/NormalsSegmentation':'false', # Use passthrough filter to detect obstacles
         'Grid/MaxGroundHeight':'0.5', # All points above 5 cm are obstacles
         'Grid/MaxObstacleHeight':'1.5',  # All points over 1 meter are ignored
         'Optimizer/GravitySigma':'0', # Disable imu constraints (we are already in 2D)
         'RGBD/CreateOccupancyGrid':"True",
-        'RGBD/DepthDecimationr': "4",  # Reduces the depth image resolution before generating the point cloud
-        'RGBD/DepthMax': "3.0",  # Filter the depth image
+        #'RGBD/DepthDecimationr': "4",  # Reduces the depth image resolution before generating the point cloud
+        #'RGBD/DepthMax': "3.0",  # Filter the depth image
         "delete_db_on_start": True,
     }
     rtabmap_remappings = [
@@ -113,8 +113,8 @@ def generate_launch_description():
             name='rtabmap',
             output='screen',
             arguments=['--delete_db_on_start'],
-            parameters=rtabmap_params,
-            remappings=rtabmap_remaps,
+            parameters=[rtabmap_parameters],
+            remappings=rtabmap_remappings,
             condition=IfCondition(LaunchConfiguration('delete_db_on_start')),
         ),
 
@@ -124,7 +124,7 @@ def generate_launch_description():
             executable='rtabmap',
             name='rtabmap',
             output='screen',
-            parameters=rtabmap_parameters,
+            parameters=[rtabmap_parameters],
             remappings=rtabmap_remappings,
             condition=UnlessCondition(LaunchConfiguration('delete_db_on_start')),
         ),
