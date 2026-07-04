@@ -14,8 +14,12 @@ rtabmap:
     sync_queue_size: 50
     topic_queue_size: 50
 
-    # Publish map → odom correction TF
+    # Publish map → odom correction TF.
+    # tf_delay must exceed the processing interval (1/DetectionRate) so the transform
+    # doesn't go stale between cycles. Without this, tf2 refuses to extrapolate and
+    # every frame above odom loses its transform until the next RTAB-Map cycle.
     publish_tf: true
+    tf_delay: 1.1
 
     # Mapping mode (not localization-only)
     Mem/IncrementalMemory: "true"
