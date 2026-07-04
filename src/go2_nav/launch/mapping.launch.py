@@ -15,7 +15,7 @@ def generate_launch_description():
         {'use_sim_time': LaunchConfiguration('use_sim_time')},
     ]
     rtabmap_remaps = [
-        ('scan_cloud', '/utlidar/cloud_restamped'),
+        ('scan_cloud', '/utlidar/cloud'),
         ('odom',       '/odom/filtered'),
         ('grid_map',   '/map'),
     ]
@@ -32,6 +32,7 @@ def generate_launch_description():
         'topic_queue_size': 50,
         #'use_action_for_goal':True,
         'Reg/Force3DoF':'true',
+        'Reg/strategy': 1,
         'Grid/CellSize': "0.05",  # Voxel downsampling
         'Grid/RayTracing':'true', # Fill empty space
         'Grid/Sensor':'1',
@@ -39,7 +40,7 @@ def generate_launch_description():
         'Grid/3D': 'false', # Use 2D occupancy
         'Grid/RangeMax':'20',
         'Grid/NormalsSegmentation':'false', # Use passthrough filter to detect obstacles
-        'Grid/MaxGroundHeight':'0.5', # All points above 5 cm are obstacles
+        'Grid/MaxGroundHeight':'0.05', # All points above 5 cm are obstacles
         'Grid/MaxObstacleHeight':'1.5',  # All points over 1 meter are ignored
         'Optimizer/GravitySigma':'0', # Disable imu constraints (we are already in 2D)
         'RGBD/CreateOccupancyGrid':"True",
@@ -61,7 +62,7 @@ def generate_launch_description():
             description='Use simulation clock',
         ),
         DeclareLaunchArgument(
-            'scan_cloud_topic', default_value='/utlidar/cloud_deskewed',
+            'scan_cloud_topic', default_value='/utlidar/cloud',
             description='LiDAR point cloud topic. Switch to /utlidar/cloud if deskewed is unavailable.',
         ),
         DeclareLaunchArgument(
