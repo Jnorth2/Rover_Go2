@@ -24,7 +24,12 @@ def generate_launch_description():
         'frame_id':'base_link',
         'use_sim_time':False,
         'subscribe_depth':False,
+        'subscribe_rgb':False,
         'subscribe_scan_cloud': True,
+        'approx_sync': True,
+        'wait_for_transform': 0.3,
+        'sync_queue_size': 50,
+        'topic_queue_size': 50,
         #'use_action_for_goal':True,
         'Reg/Force3DoF':'true',
         'Grid/CellSize': "0.05",  # Voxel downsampling
