@@ -21,10 +21,11 @@ def generate_launch_description():
     ]
 
     rtabmap_parameters = {
-        'frame_id':'trunk',
-        'odom_frame_id':'odom',
-        'map_frame_id':'map',
-        'publish_tf': True,
+        'frame_id':'base_link',
+        #'odom_frame_id':'odom',
+        #'map_frame_id':'map',
+        #'publish_tf': True,
+        # 'tf_delay': 1.1,
         'use_sim_time':False,
         'subscribe_depth':False,
         'subscribe_rgb':False,
@@ -45,7 +46,7 @@ def generate_launch_description():
         'Grid/NormalsSegmentation':'false', # Use passthrough filter to detect obstacles
         'Grid/MaxGroundHeight':'0.05', # All points above 5 cm are obstacles
         'Grid/MaxObstacleHeight':'1.5',  # All points over 1 meter are ignored
-        'Optimizer/GravitySigma':'0', # Disable imu constraints (we are already in 2D)
+        # 'Optimizer/GravitySigma':'0', # Disable imu constraints (we are already in 2D)
         'RGBD/CreateOccupancyGrid':"True",
         #'RGBD/DepthDecimationr': "4",  # Reduces the depth image resolution before generating the point cloud
         #'RGBD/DepthMax': "3.0",  # Filter the depth image
