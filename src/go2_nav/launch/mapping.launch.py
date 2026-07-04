@@ -21,7 +21,10 @@ def generate_launch_description():
     ]
 
     rtabmap_parameters = {
-        'frame_id':'base_link',
+        'frame_id':'trunk',
+        'odom_frame_id':'odom',
+        'map_frame_id':'map',
+        'publish_tf': True,
         'use_sim_time':False,
         'subscribe_depth':False,
         'subscribe_rgb':False,
