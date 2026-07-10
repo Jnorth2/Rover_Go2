@@ -10,6 +10,7 @@ find_package(ament_cmake REQUIRED)
 install(PROGRAMS
   scripts/imu_covariance_node.py
   scripts/odom_covariance_node.py
+  scripts/gps_base_node.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

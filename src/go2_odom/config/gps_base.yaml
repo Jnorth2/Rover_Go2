@@ -1,0 +1,6 @@
+gps_base_node:
+  ros__parameters:
+    port:         /dev/tty_rtkgps
+    baudrate:     115200
+    svin_min_dur: 180    # survey-in minimum duration [s]
+    svin_acc_lim: 2.0    # survey-in accuracy limit [m]

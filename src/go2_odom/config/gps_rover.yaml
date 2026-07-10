@@ -1,0 +1,34 @@
+ublox_gps_node:
+  ros__parameters:
+    device: /dev/tty_rtkgps
+    frame_id: gps
+    rate: 8.0
+    nav_rate: 1
+    dynamic_model: pedestrian
+    fix_mode: auto
+    dgnss_mode: 3              # RTK fixed mode
+
+    # Reset to rover mode if previously configured as base
+    tmode3: 0
+
+    uart1:
+      baudrate: 115200
+      in: 0                    # nothing on UART1 physical pins (corrections come via USB from /rtcm topic)
+      out: 0
+
+    gnss:
+      glonass: true
+      beidou: false
+      qzss: false
+
+    inf:
+      all: false
+
+    publish:
+      all: false
+      nav:
+        pvt: true
+        sat: true
+        status: true
+        posllh: true
+      fix: true
