@@ -22,10 +22,10 @@ def generate_launch_description():
 
     rtabmap_parameters = {
         'frame_id':'base_link',
-        #'odom_frame_id':'odom',
-        #'map_frame_id':'map',
-        #'publish_tf': True,
-        # 'tf_delay': 1.1,
+        'odom_frame_id':'odom',
+        'map_frame_id':'map',
+        'publish_tf': True,
+        'tf_delay': 1.1,
         'use_sim_time':False,
         'subscribe_depth':False,
         'subscribe_rgb':False,
@@ -56,7 +56,8 @@ def generate_launch_description():
         ('odom', '/odometry/filtered'),
         # ('rgb/image', '/camera/d455/color/image'),
         # ('rgb/camera_info', '/camera/d455/color/camera_info'),
-        ('scan_cloud', '/utlidar/cloud_restamped')
+        ('scan_cloud', '/utlidar/cloud_restamped'),
+        ('grid_map', '/map'),
     ]
 
     return LaunchDescription([
