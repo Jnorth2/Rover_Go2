@@ -64,8 +64,9 @@ def generate_launch_description():
             description='Use simulation clock',
         ),
         DeclareLaunchArgument(
-            'scan_cloud_topic', default_value='/utlidar/cloud_deskewed',
-            description='LiDAR point cloud topic. Use /utlidar/cloud if deskewed is unavailable.',
+            'scan_cloud_topic', default_value='/utlidar/cloud',
+            description='LiDAR point cloud topic. Prefer /utlidar/cloud (sensor frame). '
+                        '/utlidar/cloud_deskewed is in Go2 odom frame and breaks height filtering.',
         ),
         DeclareLaunchArgument(
             'use_rviz', default_value='false',
