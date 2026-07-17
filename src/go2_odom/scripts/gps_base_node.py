@@ -12,6 +12,7 @@ data is published — the base station's only job is producing RTK corrections.
 
 import struct
 import threading
+import time
 
 import rclpy
 from rclpy.node import Node
@@ -97,21 +98,59 @@ class GpsBaseNode(Node):
         self._thread = threading.Thread(target=self._read_loop, daemon=True)
         self._thread.start()
 
-    def _send_config(self, min_dur: int, acc_lim: float) -> None:
-        cmds = [
-            _cfg_tmode3_svin(min_dur, acc_lim),
-            _cfg_prt_usb_rtcm(),
-        ]
-        for rtcm_id in _RTCM_IDS:
-            cmds.append(_cfg_msg_usb(0xF5, rtcm_id, 1))
-        cmds.append(_cfg_msg_usb(0x01, 0x3B, 1))  # NAV-SVIN at 1 Hz for status logging
+    def _poll_nav_svin(self) -> dict | None:
+        """Poll NAV-SVIN synchronously. Returns dict with valid/active/dur or None."""
+        self._serial.reset_input_buffer()
+        self._serial.write(_ubx(0x01, 0x3B))  # poll request (empty payload)
+        buf = bytearray()
+        deadline = 2.0  # seconds
+        t0 = time.monotonic()
+        while time.monotonic() - t0 < deadline:
+            chunk = self._serial.read(256)
+            if chunk:
+                buf.extend(chunk)
+            i = 0
+            while i < len(buf):
+                if (buf[i] == 0xB5 and i + 1 < len(buf) and buf[i + 1] == 0x62
+                        and i + 6 <= len(buf)):
+                    pay_len = (buf[i + 5] << 8) | buf[i + 4]
+                    end = i + 6 + pay_len + 2
+                    if end <= len(buf):
+                        cls, mid = buf[i + 2], buf[i + 3]
+                        payload = bytes(buf[i + 6: i + 6 + pay_len])
+                        if cls == 0x01 and mid == 0x3B and len(payload) >= 40:
+                            return {
+                                'dur':    struct.unpack_from('<I', payload, 8)[0],
+                                'valid':  bool(payload[36]),
+                                'active': bool(payload[37]),
+                            }
+                        i = end
+                        continue
+                i += 1
+        return None
 
-        for cmd in cmds:
+    def _send_config(self, min_dur: int, acc_lim: float) -> None:
+        # Always enable NAV-SVIN messages and RTCM port/message config
+        port_and_rtcm = [_cfg_prt_usb_rtcm()]
+        for rtcm_id in _RTCM_IDS:
+            port_and_rtcm.append(_cfg_msg_usb(0xF5, rtcm_id, 1))
+        port_and_rtcm.append(_cfg_msg_usb(0x01, 0x3B, 1))  # NAV-SVIN at 1 Hz
+        for cmd in port_and_rtcm:
             self._serial.write(cmd)
 
-        self.get_logger().info(
-            f'Config sent: survey-in min={min_dur}s acc<={acc_lim}m, RTCM on USB'
-        )
+        # Only send CFG-TMODE3 if survey-in is not already running or valid —
+        # sending it unconditionally resets the accumulated observations.
+        status = self._poll_nav_svin()
+        if status and (status['valid'] or status['active']):
+            self.get_logger().info(
+                f'Survey-in already {"complete" if status["valid"] else "active"} '
+                f'({status["dur"]}s) — not resetting'
+            )
+        else:
+            self._serial.write(_cfg_tmode3_svin(min_dur, acc_lim))
+            self.get_logger().info(
+                f'Survey-in started: min={min_dur}s acc<={acc_lim}m'
+            )
 
     def _read_loop(self) -> None:
         buf = bytearray()
