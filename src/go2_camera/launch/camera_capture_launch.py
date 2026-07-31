@@ -25,8 +25,8 @@ def generate_launch_description():
             #enable streams
             "enable_color": True,
             "enable_depth": True,
-            "enable_accel": True,
-            "enable_gyro": True,
+            "enable_accel": False,
+            "enable_gyro": False,
             "enable_infra1": False,
             "enable_infra2": False,
             "enable_rgbd": True,
