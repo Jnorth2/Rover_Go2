@@ -10,6 +10,7 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <exec_depend>go2_odom</exec_depend>
+  <exec_depend>go2_camera</exec_depend>
   <exec_depend>go2_description</exec_depend>
   <exec_depend>rtabmap_slam</exec_depend>
   <exec_depend>rviz2</exec_depend>

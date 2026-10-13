@@ -1,5 +1,6 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
@@ -11,6 +12,12 @@ def generate_launch_description():
             'use_sim_time', default_value='false',
             choices=['true', 'false'],
             description='Use simulation clock',
+        ),
+        DeclareLaunchArgument(
+            'use_visual_odom', default_value='true',
+            choices=['true', 'false'],
+            description='Run D435 visual odometry and feed it to the EKF (odom1). '
+                        'If the camera is not running the EKF simply runs without it.',
         ),
 
         # /utlidar/robot_odom has zero covariances; inject reasonable diagonal values
@@ -52,7 +59,38 @@ def generate_launch_description():
             }],
         ),
 
-        # EKF: fuses /utlidar/robot_odom_cov + /utlidar/imu_with_covariance.
+        # Visual odometry from the D435 → /camera/d435/visual_odom (EKF odom1).
+        # publish_tf is off because the EKF owns odom → base_link. The driver's
+        # /camera/d435/rgbd is realsense2_camera_msgs/RGBD, which rtabmap can't
+        # read, so the color, aligned depth and camera info topics are used instead.
+        Node(
+            package='rtabmap_odom',
+            executable='rgbd_odometry',
+            name='rgbd_odometry',
+            output='screen',
+            parameters=[{
+                'use_sim_time': LaunchConfiguration('use_sim_time'),
+                'frame_id': 'base_link',
+                'odom_frame_id': 'odom',
+                'publish_tf': False,
+                'approx_sync': True,
+                'wait_for_transform': 0.2,
+                'Reg/Force3DoF': 'true',
+                # Re-initialize on the next frame after tracking is lost; only
+                # velocity is fused, so the pose jump on reset doesn't matter.
+                'Odom/ResetCountdown': '1',
+            }],
+            remappings=[
+                ('rgb/image',       '/camera/d435/color/image_raw'),
+                ('depth/image',     '/camera/d435/aligned_depth_to_color/image_raw'),
+                ('rgb/camera_info', '/camera/d435/color/camera_info'),
+                ('odom',            '/camera/d435/visual_odom'),
+            ],
+            condition=IfCondition(LaunchConfiguration('use_visual_odom')),
+        ),
+
+        # EKF: fuses /utlidar/robot_odom_cov + /utlidar/imu_with_covariance
+        # + /camera/d435/visual_odom (velocities only).
         # Publishes /odom and broadcasts odom → base_link TF.
         Node(
             package='robot_localization',

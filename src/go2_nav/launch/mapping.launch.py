@@ -14,47 +14,6 @@ def generate_launch_description():
         ]),
         {'use_sim_time': LaunchConfiguration('use_sim_time')},
     ]
-    rtabmap_remaps = [
-        ('scan_cloud', '/utlidar/cloud'),
-        ('odom',       '/odom/filtered'),
-        ('grid_map',   '/map'),
-    ]
-
-    rtabmap_parameters = {
-        'frame_id':'base_link',
-        'odom_frame_id':'odom',
-        'map_frame_id':'map',
-        'publish_tf': True,
-        'tf_delay': 0.05,
-        'tf_tolerance': 0.1,
-        'use_sim_time':False,
-        'subscribe_depth':False,
-        'subscribe_rgb':False,
-        'subscribe_scan_cloud': True,
-        'approx_sync': True,
-        'wait_for_transform': 0.3,
-        'sync_queue_size': 50,
-        'topic_queue_size': 50,
-        'Reg/Force3DoF': 'true',
-        'Reg/Strategy': '1',
-        'Vis/MaxFeatures': '0',
-        'Grid/CellSize': '0.05',
-        'Grid/RayTracing': 'true',
-        'Grid/Sensor': '0',
-        'Grid/FromDepth': 'false',
-        'Grid/3D': 'false',
-        'Grid/RangeMax': '20',
-        'Grid/NormalsSegmentation': 'true',
-        'Grid/NormalK': '20',
-        'Grid/MaxGroundAngle': '45',
-        'Grid/MinGroundHeight': '0.0',
-        'Grid/MaxGroundHeight': '0.0',
-        'Grid/MaxObstacleHeight': '1.5',
-        'Grid/ClusterRadius': '0.15', 
-        'Icp/PointToPlaneGroundNomralsUp': '0.9',
-        'Optimizer/GravitySigma': '0',
-        'RGBD/CreateOccupancyGrid': 'true',
-    }
     rtabmap_remappings = [
         ('odom', '/odometry/filtered'),
         # ('rgb/image', '/camera/d455/color/image'),
@@ -84,6 +43,16 @@ def generate_launch_description():
             choices=['true', 'false'],
             description='Delete the RTAB-Map database on startup to begin a fresh map',
         ),
+        DeclareLaunchArgument(
+            'use_camera', default_value='true',
+            choices=['true', 'false'],
+            description='Start the RealSense D435 driver (go2_camera camera_capture_launch.py)',
+        ),
+        DeclareLaunchArgument(
+            'use_visual_odom', default_value='true',
+            choices=['true', 'false'],
+            description='Run D435 visual odometry and fuse it in the EKF',
+        ),
 
         # Re-stamp the lidar cloud from Go2 clock to Jetson clock.
         # The Go2's system clock is offset ~113 s from the Jetson's. Without this,
@@ -100,14 +69,29 @@ def generate_launch_description():
             parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
         ),
 
-        # Odometry: EKF fusing /utlidar/robot_odom + UTlidar IMU → /odom + odom→base_link TF
+        # RealSense D435 driver (frames d435i_*, topics /camera/d435/...) plus the
+        # color video stream to the groundstation
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([
+                PathJoinSubstitution([
+                    FindPackageShare('go2_camera'), 'launch', 'camera_capture_launch.py',
+                ]),
+            ]),
+            condition=IfCondition(LaunchConfiguration('use_camera')),
+        ),
+
+        # Odometry: EKF fusing /utlidar/robot_odom + UTlidar IMU + D435 visual odometry
+        # → /odometry/filtered + odom→base_link TF
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([
                 PathJoinSubstitution([
                     FindPackageShare('go2_odom'), 'launch', 'odom.launch.py',
                 ]),
             ]),
-            launch_arguments={'use_sim_time': LaunchConfiguration('use_sim_time')}.items(),
+            launch_arguments={
+                'use_sim_time': LaunchConfiguration('use_sim_time'),
+                'use_visual_odom': LaunchConfiguration('use_visual_odom'),
+            }.items(),
         ),
 
         # Robot description: publishes /robot_description and static TF chain
@@ -128,7 +112,7 @@ def generate_launch_description():
             name='rtabmap',
             output='screen',
             arguments=['--delete_db_on_start'],
-            parameters=[rtabmap_parameters],
+            parameters=rtabmap_params,
             remappings=rtabmap_remappings,
             condition=IfCondition(LaunchConfiguration('delete_db_on_start')),
         ),
@@ -139,30 +123,10 @@ def generate_launch_description():
             executable='rtabmap',
             name='rtabmap',
             output='screen',
-            parameters=[rtabmap_parameters],
+            parameters=rtabmap_params,
             remappings=rtabmap_remappings,
             condition=UnlessCondition(LaunchConfiguration('delete_db_on_start')),
         ),
-
-        # Optional: RealSense D435 visual odometry via RTAB-Map.
-        # Uncomment once camera TF (camera_link → base_link) is added to the URDF.
-        # The D435 IMU is non-functional on Jetson Orin Nano (no HID kernel module).
-        #
-        # Node(
-        #     package='rtabmap_odom',
-        #     executable='rgbd_odometry',
-        #     name='rgbd_odometry',
-        #     output='screen',
-        #     parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time'),
-        #                  'frame_id': 'base_link',
-        #                  'approx_sync': True}],
-        #     remappings=[
-        #         ('rgb/image',       '/camera/d435/color/image_raw'),
-        #         ('depth/image',     '/camera/d435/aligned_depth_to_color/image_raw'),
-        #         ('rgb/camera_info', '/camera/d435/color/camera_info'),
-        #         ('odom',            '/camera/d435/visual_odom'),
-        #     ],
-        # ),
 
         Node(
             package='rviz2',

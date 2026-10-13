@@ -43,15 +43,25 @@ ekf_node:
     imu0_remove_gravitational_acceleration: true
     imu0_queue_size: 10
 
-    # Upgrade path: if you enable LIO-SAM on the Go2 (/lio_sam_ros2/mapping/odometry),
-    # add it here as odom1 with the same config as odom0, then change odom0 to only
-    # provide velocity (set x/y/yaw pose fields false) to avoid conflicting with LIO-SAM.
-    # odom1: /lio_sam_ros2/mapping/odometry
+    # D435 visual odometry from rtabmap_odom/rgbd_odometry (launched in odom.launch.py).
+    # Velocities only: the VO pose drifts and resets when tracking is lost. rtabmap
+    # publishes real covariances (huge when lost), so no covariance wrapper is needed.
+    # If the camera isn't running this input is simply silent.
+    odom1: /camera/d435/visual_odom
+    odom1_config: [false, false, false,   # x, y, z
+                   false, false, false,   # roll, pitch, yaw
+                   true,  true,  false,   # vx, vy, vz
+                   false, false, true,    # vroll, vpitch, vyaw
+                   false, false, false]   # ax, ay, az
+    odom1_differential: false
+    odom1_relative: false
+    odom1_queue_size: 10
 
-    # Future: RealSense D435 visual odometry (namespace /camera/d435/).
-    # Camera topics are live. IMU is disabled on Jetson Orin Nano (no HID driver).
-    # Use rtabmap_odom/rgbd_odometry with /camera/d435/color + aligned_depth_to_color.
-    # odom2: /camera/d435/visual_odom
+    # Upgrade path: if you enable LIO-SAM on the Go2 (/lio_sam_ros2/mapping/odometry),
+    # add it here as odom2 with the same config as odom0, then change odom0 to only
+    # provide velocity (set x/y/yaw pose fields false) to avoid conflicting with LIO-SAM.
+    # robot_localization reads odom0, odom1, ... in order and stops at the first gap.
+    # odom2: /lio_sam_ros2/mapping/odometry
 
     # Future: GNSS (/gnss topic already published).
     # Requires navsat_transform_node from robot_localization.
