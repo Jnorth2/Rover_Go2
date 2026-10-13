@@ -1,6 +1,6 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
@@ -8,16 +8,20 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
+    config_dir = PathJoinSubstitution([FindPackageShare('go2_nav'), 'config'])
     rtabmap_params = [
-        PathJoinSubstitution([
-            FindPackageShare('go2_nav'), 'config', 'rtabmap_mapping.yaml',
-        ]),
+        PathJoinSubstitution([config_dir, 'rtabmap_mapping.yaml']),
+        # Camera overrides on top of the lidar-only base. With use_camera:=false
+        # the base file is loaded a second time instead, which changes nothing.
+        PathJoinSubstitution([config_dir, PythonExpression([
+            "'rtabmap_camera.yaml' if '", LaunchConfiguration('use_camera'),
+            "' == 'true' else 'rtabmap_mapping.yaml'",
+        ])]),
         {'use_sim_time': LaunchConfiguration('use_sim_time')},
     ]
     rtabmap_remappings = [
         ('odom', '/odometry/filtered'),
-        # ('rgb/image', '/camera/d455/color/image'),
-        # ('rgb/camera_info', '/camera/d455/color/camera_info'),
+        ('rgbd_image', '/camera/d435/rgbd_image'),
         ('scan_cloud', '/utlidar/cloud_restamped'),
         ('grid_map', '/map'),
     ]
@@ -46,12 +50,13 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'use_camera', default_value='true',
             choices=['true', 'false'],
-            description='Start the RealSense D435 driver (go2_camera camera_capture_launch.py)',
+            description='Start the RealSense D435 driver and add the depth camera to '
+                        'RTAB-Map (rtabmap_camera.yaml); false = lidar-only mapping',
         ),
         DeclareLaunchArgument(
-            'use_visual_odom', default_value='true',
+            'use_visual_odom', default_value=LaunchConfiguration('use_camera'),
             choices=['true', 'false'],
-            description='Run D435 visual odometry and fuse it in the EKF',
+            description='Run D435 visual odometry and fuse it in the EKF (defaults to use_camera)',
         ),
 
         # Re-stamp the lidar cloud from Go2 clock to Jetson clock.
@@ -77,6 +82,27 @@ def generate_launch_description():
                     FindPackageShare('go2_camera'), 'launch', 'camera_capture_launch.py',
                 ]),
             ]),
+            condition=IfCondition(LaunchConfiguration('use_camera')),
+        ),
+
+        # Bundle color + aligned depth + camera info into one rtabmap_msgs/RGBDImage
+        # for RTAB-Map. The driver's own /camera/d435/rgbd is realsense2_camera_msgs/RGBD,
+        # which RTAB-Map can't read.
+        Node(
+            package='rtabmap_sync',
+            executable='rgbd_sync',
+            name='rgbd_sync',
+            output='screen',
+            parameters=[{
+                'use_sim_time': LaunchConfiguration('use_sim_time'),
+                'approx_sync': True,
+            }],
+            remappings=[
+                ('rgb/image',       '/camera/d435/color/image_raw'),
+                ('depth/image',     '/camera/d435/aligned_depth_to_color/image_raw'),
+                ('rgb/camera_info', '/camera/d435/color/camera_info'),
+                ('rgbd_image',      '/camera/d435/rgbd_image'),
+            ],
             condition=IfCondition(LaunchConfiguration('use_camera')),
         ),
 

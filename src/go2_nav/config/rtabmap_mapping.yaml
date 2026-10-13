@@ -30,16 +30,21 @@ rtabmap:
     Optimizer/GravitySigma: "0"
 
     # Lidar-only SLAM: disable visual feature extraction
+    # (re-enabled by rtabmap_camera.yaml when the camera is used)
     Vis/MaxFeatures: "0"
 
-    # 2D occupancy grid (5 cm cells) built from the scan cloud, with ground
-    # segmentation by surface normals
+    # Occupancy grid (5 cm cells) built from the scan cloud, with ground
+    # segmentation by surface normals. rtabmap_camera.yaml switches Grid/Sensor
+    # to lidar + depth camera when the camera is used.
     RGBD/CreateOccupancyGrid: "true"
     Grid/CellSize: "0.05"
     Grid/RayTracing: "true"
     Grid/Sensor: "0"
     Grid/FromDepth: "false"
-    Grid/3D: "false"
+    # 3D occupancy (OctoMap: /octomap_full, /octomap_occupied_space). The 2D /map
+    # is still published as a projection. The 3D point cloud map is /cloud_map,
+    # or /mapData for the rtabmap_rviz_plugins MapCloud display.
+    Grid/3D: "true"
     Grid/RangeMax: "20"
     Grid/NormalsSegmentation: "true"
     Grid/NormalK: "20"

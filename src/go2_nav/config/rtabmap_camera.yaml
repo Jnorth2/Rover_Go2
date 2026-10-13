@@ -1,0 +1,18 @@
+# Overrides applied on top of rtabmap_mapping.yaml when mapping.launch.py runs
+# with use_camera:=true. Adds the D435 (via rgbd_sync → /camera/d435/rgbd_image)
+# alongside the lidar scan cloud.
+rtabmap:
+  ros__parameters:
+    subscribe_rgbd: true
+
+    # The lidar cloud is stamped on arrival and the camera near capture; correct
+    # each sensor's data with the odometry between the two stamps.
+    odom_sensor_sync: true
+
+    # Visual features for loop closure detection. Visual registration gives the
+    # loop closure guess, ICP refines it on the lidar cloud.
+    Vis/MaxFeatures: "1000"
+    Reg/Strategy: "2"
+
+    # Occupancy from both the lidar cloud and the depth image
+    Grid/Sensor: "2"
