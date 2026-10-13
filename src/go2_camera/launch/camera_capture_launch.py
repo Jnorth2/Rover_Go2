@@ -17,11 +17,11 @@ def generate_launch_description():
         executable='realsense2_camera_node',
         name='d435',
         parameters=[{
-            "camera_name": "d435",
+            "camera_name": "d435i",
             "serial_no":"238722072340",
 
-            "depth_module.depth_profile": "848x480x30",
-            "rgb_camera.color_profile": "1280x720x30",
+            "depth_module.depth_profile": "848x480x15",
+            "rgb_camera.color_profile": "848x480x15",
             #enable streams
             "enable_color": True,
             "enable_depth": True,
@@ -89,9 +89,9 @@ def generate_launch_description():
         name='realsense_conversion',
         parameters=[{
             'image_topic': '/camera/d435/color/image_raw',
-            'cap_width': 1920,
-            'cap_height': 1080,
-            'cap_framerate': 30,
+            'cap_width': 848,
+            'cap_height': 480,
+            'cap_framerate': 15,
             'speed_preset': 'ultrafast',
             'bitrate': 4000,
             'stream_width': 1920,
