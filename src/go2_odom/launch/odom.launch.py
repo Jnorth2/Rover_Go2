@@ -35,7 +35,9 @@ def generate_launch_description():
             ],
             parameters=[{
                 'use_sim_time': LaunchConfiguration('use_sim_time'),
-                'pose_covariance_diagonal':  [0.01, 0.01, 0.1, 0.1, 0.1, 0.05],
+                # roll/pitch tightened from 0.1 (≈18°) to 0.005 (≈4°) now that the
+                # EKF fuses them for 3D SLAM
+                'pose_covariance_diagonal':  [0.01, 0.01, 0.05, 0.005, 0.005, 0.05],
                 'twist_covariance_diagonal': [0.01, 0.05, 0.1, 0.1, 0.1, 0.02],
             }],
         ),
@@ -75,7 +77,6 @@ def generate_launch_description():
                 'publish_tf': False,
                 'approx_sync': True,
                 'wait_for_transform': 0.2,
-                'Reg/Force3DoF': 'true',
                 # Re-initialize on the next frame after tracking is lost; only
                 # velocity is fused, so the pose jump on reset doesn't matter.
                 'Odom/ResetCountdown': '1',

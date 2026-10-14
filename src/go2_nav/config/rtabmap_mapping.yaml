@@ -21,13 +21,13 @@ rtabmap:
     sync_queue_size: 50
     topic_queue_size: 50
 
-    # ICP registration, constrained to 2D (x, y, yaw)
-    Reg/Force3DoF: "true"
+    # Full 6-DoF SLAM: registration and loop closures solve x, y, z, roll, pitch, yaw
+    Reg/Force3DoF: "false"
     Reg/Strategy: "1"
-    # NOTE: misspelled ("Nomrals"), so RTAB-Map ignores it. The real parameter is
-    # Icp/PointToPlaneGroundNormalsUp. Kept as-is to match previous behavior.
-    Icp/PointToPlaneGroundNomralsUp: "0.9"
-    Optimizer/GravitySigma: "0"
+    # Keep the optimized map level. RTAB-Map treats odometry roll/pitch as the gravity
+    # direction, which is valid because the EKF fuses absolute roll/pitch from the Go2's
+    # state estimator. Needs the g2o or GTSAM optimizer (the apt build has both).
+    Optimizer/GravitySigma: "0.3"
 
     # Lidar-only SLAM: disable visual feature extraction
     # (re-enabled by rtabmap_camera.yaml when the camera is used)

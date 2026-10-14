@@ -16,10 +16,12 @@ ekf_node:
     # Primary: Unitree state estimator (leg kinematics + body IMU).
     # Always running on the Go2. /utlidar/robot_odom has zero covariances so we
     # run it through odom_covariance_node first → /utlidar/robot_odom_cov.
-    # Trusting x/y position and yaw; z/roll/pitch excluded (noisy on legged robots).
+    # Full 6-DoF pose for 3D SLAM. Roll/pitch here are absolute (the Go2 estimator
+    # fuses its body IMU), so they don't drift; without them roll/pitch would only
+    # come from integrating IMU gyro rates and the 3D map would slowly tilt.
     odom0: /utlidar/robot_odom_cov
-    odom0_config: [true,  true,  false,   # x, y, z
-                   false, false, true,    # roll, pitch, yaw
+    odom0_config: [true,  true,  true,    # x, y, z
+                   true,  true,  true,    # roll, pitch, yaw
                    true,  true,  false,   # vx, vy, vz
                    false, false, true,    # vroll, vpitch, vyaw
                    false, false, false]   # ax, ay, az
