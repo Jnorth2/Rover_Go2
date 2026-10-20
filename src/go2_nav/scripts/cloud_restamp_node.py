@@ -27,7 +27,7 @@ class CloudRestampNode(Node):
     def __init__(self):
         super().__init__('cloud_restamp_node')
 
-        self.declare_parameter('min_range', 0.5)  # m from the sensor; 0 disables
+        self.declare_parameter('min_range', 0.0)  # m from the sensor; 0 disables (try 0.5)
 
         sub_qos = QoSProfile(
             reliability=ReliabilityPolicy.BEST_EFFORT,
