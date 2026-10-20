@@ -39,7 +39,7 @@ def generate_launch_description():
                         '/utlidar/cloud_deskewed is in Go2 odom frame and breaks height filtering.',
         ),
         DeclareLaunchArgument(
-            'lidar_min_range', default_value='0.0',
+            'lidar_min_range', default_value='0.5',
             description='Discard lidar returns closer than this to the sensor (m); 0 disables',
         ),
         DeclareLaunchArgument(

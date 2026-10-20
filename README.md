@@ -164,6 +164,10 @@ ros2 launch go2_control go2_joy_launch.py max_linear:=1.2 max_angular:=1.5
 | `deadzone` | `0.08` | Stick deadzone |
 | `joy_timeout` | `0.5` | `/joy` older than this (s) counts as sticks centred |
 | `cmd_vel_timeout` | `0.5` | `/cmd_vel` older than this (s) is ignored |
+| `nav_min_linear` | `0.15` | Nav2 walking speeds below this (m/s) are raised to it |
+| `nav_min_angular` | `0.3` | Nav2 turn-in-place rates below this (rad/s) are raised to it |
+| `nav_deadband_linear` | `0.03` | Nav2 speeds below this (m/s) are treated as stop |
+| `nav_deadband_angular` | `0.05` | Nav2 yaw rates below this (rad/s) are treated as stop |
 
 Axis indices follow the `joy_linux` driver defaults for DS4 / DualSense.
 If your controller maps differently run `ros2 topic echo /joy` and check the
@@ -226,6 +230,7 @@ rest so the TF tree is complete when the costmaps activate.
 | `use_camera` | `true` | D435 driver, RGB-D in RTAB-Map and visual odometry in the EKF |
 | `params_file` | `go2_nav/config/nav2_params.yaml` | Nav2 parameters |
 | `nav2_start_delay` | `5.0` | Seconds before Nav2 starts |
+| `lidar_min_range` | `0.5` | Drop lidar returns closer than this to the sensor (m); `0` disables |
 
 Nav2 tuning lives in `src/go2_nav/config/nav2_params.yaml`: MPPI (omni motion
 model, 0.5 m/s forward / 0.3 m/s lateral / 1.0 rad/s), footprint, inflation, and

@@ -72,14 +72,17 @@ controller_server:
       vx_min: -0.3
       vy_max: 0.3
       wz_max: 1.0
-      vx_std: 0.2
-      vy_std: 0.2
-      wz_std: 0.4
-      ax_max: 1.5
-      ax_min: -1.5
-      ay_max: 1.5
-      ay_min: -1.5
-      az_max: 2.0
+      # Wider sampling so faster sequences get tried, not just the previous one ± 0.2
+      vx_std: 0.3
+      vy_std: 0.25
+      wz_std: 0.5
+      # A legged robot can brake hard; high limits let MPPI carry speed until late
+      # instead of planning a long wheeled-style deceleration
+      ax_max: 2.5
+      ax_min: -2.5
+      ay_max: 2.5
+      ay_min: -2.5
+      az_max: 3.0
       # Must exceed vx_max × horizon (1.5 m)
       prune_distance: 1.7
       transform_tolerance: 0.2
@@ -99,11 +102,14 @@ controller_server:
         enabled: true
         cost_power: 1
         cost_weight: 4.0
+      # Goal and path-follow hand over at 0.7 m (default 1.4 m). Path following is
+      # what pushes progress, so the default switches it off early and the robot
+      # eases in over the last 1.4 m; the heavier goal pull keeps the approach fast.
       GoalCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 5.0
-        threshold_to_consider: 1.4
+        cost_weight: 8.0
+        threshold_to_consider: 0.7
       GoalAngleCritic:
         enabled: true
         cost_power: 1
@@ -137,9 +143,9 @@ controller_server:
       PathFollowCritic:
         enabled: true
         cost_power: 1
-        cost_weight: 5.0
+        cost_weight: 8.0
         offset_from_furthest: 5
-        threshold_to_consider: 1.4
+        threshold_to_consider: 0.7
       PathAngleCritic:
         enabled: true
         cost_power: 1
@@ -328,8 +334,8 @@ velocity_smoother:
     # [vx, vy, wz]; keep within the MPPI limits above
     max_velocity: [0.5, 0.3, 1.0]
     min_velocity: [-0.3, -0.3, -1.0]
-    max_accel: [1.5, 1.5, 2.0]
-    max_decel: [-1.5, -1.5, -2.0]
+    max_accel: [2.5, 2.5, 3.0]
+    max_decel: [-2.5, -2.5, -3.0]
     odom_topic: /odometry/filtered
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]

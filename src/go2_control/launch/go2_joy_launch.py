@@ -29,6 +29,11 @@ def generate_launch_description():
                 # Stale /joy or /cmd_vel counts as zero (link loss stops the robot)
                 'joy_timeout': 0.5,
                 'cmd_vel_timeout': 0.5,
+                # Nav2 commands are raised to at least these (Go2 steps discretely)
+                'nav_min_linear': 0.15,   # m/s
+                'nav_min_angular': 0.3,   # rad/s
+                'nav_deadband_linear': 0.03,
+                'nav_deadband_angular': 0.05,
             }],
         ),
     ])
