@@ -7,18 +7,20 @@ from unitree_api.msg import Request
 
 # API IDs from ros2_sport_client.h
 _API_BALANCE_STAND = 1002
+_API_EULER = 1007
 _API_MOVE = 1008
 _API_STANDUP = 1004
 _API_STANDDOWN = 1005
 
-# PS4/5 axis indices (joy_linux defaults)
+# PS4/5 axis indices (joy/SDL GameController layout)
 #   axes[0]  left stick X  (+1=left,  -1=right)
 #   axes[1]  left stick Y  (+1=up,    -1=down)   → vx
-#   axes[2]  L2 trigger
-#   axes[3]  right stick X (+1=left,  -1=right)  → vyaw
-#   axes[4]  right stick Y
+#   axes[2]  right stick X (+1=left,  -1=right)  → vyaw
+#   axes[3]  right stick Y (+1=up,    -1=down)   → body pitch
+#   axes[4]  L2 trigger
+#   axes[5]  R2 trigger
 # Button indices
-#   0=Cross  1=Circle  2=Triangle  3=Square  4=L1  5=R1
+#   0=Cross  1=Circle  2=Square  3=Triangle  4=Share  5=PS  6=Options
 
 _DEADZONE = 0.08
 
@@ -29,10 +31,12 @@ class Go2JoyTeleop(Node):
 
         self.declare_parameter('axis_vx', 1)        # left stick Y
         self.declare_parameter('axis_vy', 0)        # left stick X
-        self.declare_parameter('axis_vyaw', 3)      # right stick X
-        self.declare_parameter('btn_sit_stand', 3)  # Square
+        self.declare_parameter('axis_vyaw', 2)      # right stick X
+        self.declare_parameter('axis_pitch', 3)     # right stick Y
+        self.declare_parameter('btn_sit_stand', 2)  # Square
         self.declare_parameter('max_linear', 0.8)   # m/s
         self.declare_parameter('max_angular', 1.0)  # rad/s
+        self.declare_parameter('max_pitch', 0.3)    # rad (Go2 limit ~0.75)
         self.declare_parameter('deadzone', _DEADZONE)
 
         self._pub = self.create_publisher(Request, '/api/sport/request', 10)
@@ -44,6 +48,8 @@ class Go2JoyTeleop(Node):
         self._ready_to_move = False
         self._prev_btn = 0
         self._balance_stand_timer = None
+        self._was_moving = False
+        self._prev_pitch = 0.0
 
     def _joy_cb(self, msg: Joy):
         self._joy = msg
@@ -64,15 +70,34 @@ class Go2JoyTeleop(Node):
             ax_vx = self.get_parameter('axis_vx').value
             ax_vy = self.get_parameter('axis_vy').value
             ax_vyaw = self.get_parameter('axis_vyaw').value
+            ax_pitch = self.get_parameter('axis_pitch').value
             max_lin = self.get_parameter('max_linear').value
             max_ang = self.get_parameter('max_angular').value
+            max_pitch = self.get_parameter('max_pitch').value
             dz = self.get_parameter('deadzone').value
 
             vx = self._dz(self._axis(joy, ax_vx), dz) * max_lin
             vy = self._dz(self._axis(joy, ax_vy), dz) * max_lin
             vyaw = self._dz(self._axis(joy, ax_vyaw), dz) * max_ang
+            # Stick up = look up; Go2 positive pitch is nose down
+            pitch = -self._dz(self._axis(joy, ax_pitch), dz) * max_pitch
 
-            self._send_move(vx, vy, vyaw)
+            if vx or vy or vyaw:
+                self._send_move(vx, vy, vyaw)
+                self._was_moving = True
+                self._prev_pitch = 0.0
+                return
+
+            if self._was_moving:
+                # Stop, then return to balance stand so Euler takes effect
+                self._send_move(0.0, 0.0, 0.0)
+                self._send_api(_API_BALANCE_STAND)
+                self._was_moving = False
+
+            # Euler holds while stick is deflected; one zero on release levels the body
+            if pitch or self._prev_pitch:
+                self._send_euler(0.0, pitch, 0.0)
+            self._prev_pitch = pitch
 
     def _toggle_sit_stand(self):
         if self._is_sitting:
@@ -103,6 +128,12 @@ class Go2JoyTeleop(Node):
         req = Request()
         req.header.identity.api_id = _API_MOVE
         req.parameter = json.dumps({'x': vx, 'y': vy, 'z': vyaw})
+        self._pub.publish(req)
+
+    def _send_euler(self, roll: float, pitch: float, yaw: float):
+        req = Request()
+        req.header.identity.api_id = _API_EULER
+        req.parameter = json.dumps({'x': roll, 'y': pitch, 'z': yaw})
         self._pub.publish(req)
 
     def _send_api(self, api_id: int):
