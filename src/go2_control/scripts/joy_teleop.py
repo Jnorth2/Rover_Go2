@@ -2,6 +2,7 @@
 import json
 import rclpy
 from rclpy.node import Node
+from geometry_msgs.msg import Twist
 from sensor_msgs.msg import Joy
 from unitree_api.msg import Request
 
@@ -21,6 +22,9 @@ _API_STANDDOWN = 1005
 #   axes[5]  R2 trigger
 # Button indices
 #   0=Cross  1=Circle  2=Square  3=Triangle  4=Share  5=PS  6=Options
+#
+# /cmd_vel (Nav2) is forwarded as Move when the sticks are idle and Nav2 is
+# enabled (Triangle toggles). Stick input always takes priority over Nav2.
 
 _DEADZONE = 0.08
 
@@ -34,16 +38,27 @@ class Go2JoyTeleop(Node):
         self.declare_parameter('axis_vyaw', 2)      # right stick X
         self.declare_parameter('axis_pitch', 3)     # right stick Y
         self.declare_parameter('btn_sit_stand', 2)  # Square
+        self.declare_parameter('btn_nav_toggle', 3)  # Triangle
+        self.declare_parameter('nav_enabled', True)  # Nav2 may drive at startup
         self.declare_parameter('max_linear', 0.8)   # m/s
         self.declare_parameter('max_angular', 1.0)  # rad/s
         self.declare_parameter('max_pitch', 0.3)    # rad (Go2 limit ~0.75)
         self.declare_parameter('deadzone', _DEADZONE)
+        # Inputs older than this are treated as zero, so a lost link stops the robot
+        self.declare_parameter('joy_timeout', 0.5)      # s (joy_node autorepeats at 20 Hz)
+        self.declare_parameter('cmd_vel_timeout', 0.5)  # s
 
         self._pub = self.create_publisher(Request, '/api/sport/request', 10)
         self._joy_sub = self.create_subscription(Joy, '/joy', self._joy_cb, 10)
+        self._cmd_vel_sub = self.create_subscription(Twist, '/cmd_vel', self._cmd_vel_cb, 10)
         self._timer = self.create_timer(0.05, self._tick)  # 20 Hz
 
         self._joy: Joy | None = None
+        self._joy_time = None
+        self._cmd_vel: Twist | None = None
+        self._cmd_vel_time = None
+        self._nav_enabled = self.get_parameter('nav_enabled').value
+        self._prev_nav_btn = 0
         self._is_sitting = False
         self._ready_to_move = False
         self._prev_btn = 0
@@ -53,34 +68,62 @@ class Go2JoyTeleop(Node):
 
     def _joy_cb(self, msg: Joy):
         self._joy = msg
+        self._joy_time = self.get_clock().now()
+
+    def _cmd_vel_cb(self, msg: Twist):
+        self._cmd_vel = msg
+        self._cmd_vel_time = self.get_clock().now()
+
+    def _is_fresh(self, stamp, timeout_param: str) -> bool:
+        if stamp is None:
+            return False
+        age = (self.get_clock().now() - stamp).nanoseconds * 1e-9
+        return age < self.get_parameter(timeout_param).value
 
     def _tick(self):
-        if self._joy is None:
-            return
+        joy = self._joy if self._is_fresh(self._joy_time, 'joy_timeout') else None
 
-        joy = self._joy
-        btn_idx = self.get_parameter('btn_sit_stand').value
+        if joy is not None:
+            btn_idx = self.get_parameter('btn_sit_stand').value
+            btn = joy.buttons[btn_idx] if btn_idx < len(joy.buttons) else 0
+            if btn and not self._prev_btn:
+                self._toggle_sit_stand()
+            self._prev_btn = btn
 
-        btn = joy.buttons[btn_idx] if btn_idx < len(joy.buttons) else 0
-        if btn and not self._prev_btn:
-            self._toggle_sit_stand()
-        self._prev_btn = btn
+            nav_idx = self.get_parameter('btn_nav_toggle').value
+            nav_btn = joy.buttons[nav_idx] if nav_idx < len(joy.buttons) else 0
+            if nav_btn and not self._prev_nav_btn:
+                self._nav_enabled = not self._nav_enabled
+                self.get_logger().info(
+                    'Nav2 control ' + ('enabled' if self._nav_enabled else 'disabled'))
+            self._prev_nav_btn = nav_btn
 
         if self._ready_to_move:
-            ax_vx = self.get_parameter('axis_vx').value
-            ax_vy = self.get_parameter('axis_vy').value
-            ax_vyaw = self.get_parameter('axis_vyaw').value
-            ax_pitch = self.get_parameter('axis_pitch').value
             max_lin = self.get_parameter('max_linear').value
             max_ang = self.get_parameter('max_angular').value
-            max_pitch = self.get_parameter('max_pitch').value
-            dz = self.get_parameter('deadzone').value
+            vx = vy = vyaw = pitch = 0.0
 
-            vx = self._dz(self._axis(joy, ax_vx), dz) * max_lin
-            vy = self._dz(self._axis(joy, ax_vy), dz) * max_lin
-            vyaw = self._dz(self._axis(joy, ax_vyaw), dz) * max_ang
-            # Stick up = look up; Go2 positive pitch is nose down
-            pitch = -self._dz(self._axis(joy, ax_pitch), dz) * max_pitch
+            if joy is not None:
+                ax_vx = self.get_parameter('axis_vx').value
+                ax_vy = self.get_parameter('axis_vy').value
+                ax_vyaw = self.get_parameter('axis_vyaw').value
+                ax_pitch = self.get_parameter('axis_pitch').value
+                max_pitch = self.get_parameter('max_pitch').value
+                dz = self.get_parameter('deadzone').value
+
+                vx = self._dz(self._axis(joy, ax_vx), dz) * max_lin
+                vy = self._dz(self._axis(joy, ax_vy), dz) * max_lin
+                vyaw = self._dz(self._axis(joy, ax_vyaw), dz) * max_ang
+                # Stick up = look up; Go2 positive pitch is nose down
+                pitch = -self._dz(self._axis(joy, ax_pitch), dz) * max_pitch
+
+            # Sticks idle: let Nav2 drive, within the same speed limits
+            if (not (vx or vy or vyaw) and self._nav_enabled
+                    and self._is_fresh(self._cmd_vel_time, 'cmd_vel_timeout')):
+                cmd = self._cmd_vel
+                vx = self._clamp(cmd.linear.x, max_lin)
+                vy = self._clamp(cmd.linear.y, max_lin)
+                vyaw = self._clamp(cmd.angular.z, max_ang)
 
             if vx or vy or vyaw:
                 self._send_move(vx, vy, vyaw)
@@ -148,6 +191,10 @@ class Go2JoyTeleop(Node):
     @staticmethod
     def _dz(val: float, dz: float) -> float:
         return 0.0 if abs(val) < dz else val
+
+    @staticmethod
+    def _clamp(val: float, limit: float) -> float:
+        return max(-limit, min(limit, val))
 
 
 def main():

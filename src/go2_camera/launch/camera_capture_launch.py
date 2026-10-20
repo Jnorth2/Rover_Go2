@@ -55,6 +55,12 @@ def generate_launch_description():
             "temporal_filter.filter_smooth_delta": 25,
             "temporal_filter.holes_fill": 0,  # low persistence; use 0 if moving fast
             "temporal_filter.frames_queue_size": 16,
+            #Threshold Filter: drop depth beyond 4 m, where D435 error grows
+            #quadratically. Applies to everything downstream (RTAB-Map grid and
+            #features, visual odometry, point cloud).
+            "threshold_filter.enable": True,
+            "threshold_filter.min_distance": 0.2,
+            "threshold_filter.max_distance": 4.0,
 
         }],
         output='screen',

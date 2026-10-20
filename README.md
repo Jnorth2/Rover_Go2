@@ -109,6 +109,7 @@ existing Zenoh ROS2 link.
 
 ```
 Groundstation joy_node  →  /joy  →  (Zenoh)  →  Orin go2_joy_teleop  →  /api/sport/request
+                                     Nav2  →  /cmd_vel  ↗
 ```
 
 ### Controller mapping
@@ -118,7 +119,9 @@ Groundstation joy_node  →  /joy  →  (Zenoh)  →  Orin go2_joy_teleop  →  
 | Left stick — up / down | Forward / backward |
 | Left stick — left / right | Strafe left / right |
 | Right stick — left / right | Turn left / right |
+| Right stick — up / down | Tilt body (look up / down) |
 | **□ Square** | Toggle sit / stand |
+| **△ Triangle** | Allow / block Nav2 `/cmd_vel` |
 
 ### Running joystick control
 
@@ -150,15 +153,95 @@ ros2 launch go2_control go2_joy_launch.py max_linear:=1.2 max_angular:=1.5
 |-----------|---------|-------------|
 | `axis_vx` | `1` | Axis index for forward / backward |
 | `axis_vy` | `0` | Axis index for strafe |
-| `axis_vyaw` | `3` | Axis index for yaw (turn) |
-| `btn_sit_stand` | `3` | Button index for sit / stand toggle |
-| `max_linear` | `0.8` | Max linear speed (m/s) |
-| `max_angular` | `1.0` | Max yaw rate (rad/s) |
+| `axis_vyaw` | `2` | Axis index for yaw (turn) |
+| `axis_pitch` | `3` | Axis index for body pitch |
+| `btn_sit_stand` | `2` | Button index for sit / stand toggle |
+| `btn_nav_toggle` | `3` | Button index for allowing / blocking Nav2 |
+| `nav_enabled` | `true` | Whether Nav2 may drive at startup |
+| `max_linear` | `0.8` | Max linear speed (m/s), joystick and Nav2 |
+| `max_angular` | `1.0` | Max yaw rate (rad/s), joystick and Nav2 |
+| `max_pitch` | `0.3` | Body pitch at full stick (rad) |
 | `deadzone` | `0.08` | Stick deadzone |
+| `joy_timeout` | `0.5` | `/joy` older than this (s) counts as sticks centred |
+| `cmd_vel_timeout` | `0.5` | `/cmd_vel` older than this (s) is ignored |
 
 Axis indices follow the `joy_linux` driver defaults for DS4 / DualSense.
 If your controller maps differently run `ros2 topic echo /joy` and check the
 indices while moving each stick.
+
+## Navigation (RTAB-Map + Nav2)
+
+Two launch files bring up everything for mapping and autonomous navigation.
+
+**Go2 / Jetson** — camera, EKF odometry, robot description, RTAB-Map SLAM,
+lidar obstacle segmentation, Nav2 and the joystick / `cmd_vel` teleop:
+
+```bash
+ros2 launch go2_nav navigation.launch.py
+```
+
+**Groundstation** — RViz (map, costmaps, plan, Nav2 panel) and the joystick:
+
+```bash
+ros2 launch go2_nav groundstation_navigation.launch.py
+```
+
+The camera feed is not part of the groundstation launch; view it with
+`groundstation/camera_gstreamer.sh`.
+
+Each run starts a **new map** (`~/.ros/rtabmap.db` is deleted on startup). To keep
+mapping into the previous database pass `delete_db_on_start:=false`. The same
+default applies to `mapping.launch.py`.
+
+### Driving
+
+1. Press **□** twice (sit, then stand). The teleop only sends motion commands
+   after its own stand-up / balance-stand sequence.
+2. Drive with the sticks to build some map, or straight away use **Nav2 Goal**
+   (or **2D Goal Pose**) in RViz. Goals may be in unexplored (unknown) space.
+3. Any stick input overrides Nav2 while held. **△** blocks / re-allows Nav2
+   commands entirely (the robot stops when blocked). If `/joy` stops arriving
+   (link loss), the sticks count as centred.
+
+### Data flow
+
+```
+/utlidar/cloud → cloud_restamp_node → /utlidar/cloud_restamped
+    ├→ rtabmap (SLAM) → /map, map→odom TF
+    └→ obstacles_detection → /utlidar/obstacles, /utlidar/ground → costmaps, collision_monitor
+EKF → /odometry/filtered, odom→base_link TF
+controller_server → cmd_vel_nav → velocity_smoother → cmd_vel_smoothed
+    → collision_monitor → /cmd_vel → go2_joy_teleop → /api/sport/request (Move)
+```
+
+There is no AMCL or map_server: RTAB-Map localizes and its growing `/map` is the
+global costmap's static layer. Nav2 starts `nav2_start_delay` (5 s) after the
+rest so the TF tree is complete when the costmaps activate.
+
+### Launch arguments (`navigation.launch.py`)
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `delete_db_on_start` | `true` | Fresh RTAB-Map database each run |
+| `use_camera` | `true` | D435 driver, RGB-D in RTAB-Map and visual odometry in the EKF |
+| `params_file` | `go2_nav/config/nav2_params.yaml` | Nav2 parameters |
+| `nav2_start_delay` | `5.0` | Seconds before Nav2 starts |
+
+Nav2 tuning lives in `src/go2_nav/config/nav2_params.yaml`: MPPI (omni motion
+model, 0.5 m/s forward / 0.3 m/s lateral / 1.0 rad/s), footprint, inflation, and
+collision monitor.
+
+### Jetson dependencies
+
+```bash
+sudo apt install ros-jazzy-navigation2 ros-jazzy-rtabmap-ros
+```
+
+After pulling, rebuild so the new launch and config files are installed:
+
+```bash
+colcon build --symlink-install --packages-select go2_nav go2_control
+```
 
 ## Groundstation laptop setup
 
@@ -222,3 +305,15 @@ Zenoh port       7447             (TCP, both sides)
 |------|---------|
 | `scripts/joy_teleop.py` | Translates `/joy` messages to Go2 sport API commands |
 | `launch/go2_joy_launch.py` | Launches `joy_teleop.py` with default parameters |
+
+### src/go2_nav/
+
+| File | Purpose |
+|------|---------|
+| `launch/navigation.launch.py` | Go2: full stack (mapping + obstacles + Nav2 + teleop) |
+| `launch/groundstation_navigation.launch.py` | Groundstation: RViz + joystick |
+| `launch/mapping.launch.py` | Go2: camera, EKF, description, RTAB-Map only |
+| `launch/groundstation_mapping.launch.py` | Groundstation: RViz for mapping only |
+| `config/nav2_params.yaml` | Nav2 parameters |
+| `config/rtabmap_mapping.yaml`, `config/rtabmap_camera.yaml` | RTAB-Map parameters |
+| `config/groundstation_navigation.rviz` | RViz layout with Nav2 panel and goal tools |

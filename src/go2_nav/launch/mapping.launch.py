@@ -43,9 +43,10 @@ def generate_launch_description():
             description='Launch RViz (disabled by default; run groundstation_mapping.launch.py instead)',
         ),
         DeclareLaunchArgument(
-            'delete_db_on_start', default_value='false',
+            'delete_db_on_start', default_value='true',
             choices=['true', 'false'],
-            description='Delete the RTAB-Map database on startup to begin a fresh map',
+            description='Delete the RTAB-Map database on startup to begin a fresh map '
+                        '(default). false = resume mapping into ~/.ros/rtabmap.db',
         ),
         DeclareLaunchArgument(
             'use_camera', default_value='true',
@@ -140,6 +141,10 @@ def generate_launch_description():
             arguments=['--delete_db_on_start'],
             parameters=rtabmap_params,
             remappings=rtabmap_remappings,
+            # Saving a large map to the database on Ctrl+C can take well over
+            # launch's default 5 s before SIGTERM/SIGKILL, corrupting the .db.
+            sigterm_timeout='120',
+            sigkill_timeout='120',
             condition=IfCondition(LaunchConfiguration('delete_db_on_start')),
         ),
 
@@ -151,6 +156,10 @@ def generate_launch_description():
             output='screen',
             parameters=rtabmap_params,
             remappings=rtabmap_remappings,
+            # Saving a large map to the database on Ctrl+C can take well over
+            # launch's default 5 s before SIGTERM/SIGKILL, corrupting the .db.
+            sigterm_timeout='120',
+            sigkill_timeout='120',
             condition=UnlessCondition(LaunchConfiguration('delete_db_on_start')),
         ),
 

@@ -40,7 +40,6 @@ rtabmap:
     Grid/CellSize: "0.05"
     Grid/RayTracing: "true"
     Grid/Sensor: "0"
-    Grid/FromDepth: "false"
     # 3D occupancy (OctoMap: /octomap_full, /octomap_occupied_space). The 2D /map
     # is still published as a projection. The 3D point cloud map is /cloud_map,
     # or /mapData for the rtabmap_rviz_plugins MapCloud display.
@@ -53,3 +52,6 @@ rtabmap:
     Grid/MaxGroundHeight: "0.0"
     Grid/MaxObstacleHeight: "1.5"
     Grid/ClusterRadius: "0.15"
+    # Pad /map to at least 30 m across so the Nav2 global costmap (sized from /map)
+    # covers unexplored space around a new map and goals can be sent into it
+    GridGlobal/MinSize: "30"
