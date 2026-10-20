@@ -4,6 +4,7 @@ from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, Pyth
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -36,6 +37,10 @@ def generate_launch_description():
             'scan_cloud_topic', default_value='/utlidar/cloud',
             description='LiDAR point cloud topic. Prefer /utlidar/cloud (sensor frame). '
                         '/utlidar/cloud_deskewed is in Go2 odom frame and breaks height filtering.',
+        ),
+        DeclareLaunchArgument(
+            'lidar_min_range', default_value='0.5',
+            description='Discard lidar returns closer than this to the sensor (m); 0 disables',
         ),
         DeclareLaunchArgument(
             'use_rviz', default_value='false',
@@ -72,7 +77,12 @@ def generate_launch_description():
                 ('cloud_in',  LaunchConfiguration('scan_cloud_topic')),
                 ('cloud_out', '/utlidar/cloud_restamped'),
             ],
-            parameters=[{'use_sim_time': LaunchConfiguration('use_sim_time')}],
+            parameters=[{
+                'use_sim_time': LaunchConfiguration('use_sim_time'),
+                # Drop returns this close to the lidar (spurious points ahead of the head)
+                'min_range': ParameterValue(
+                    LaunchConfiguration('lidar_min_range'), value_type=float),
+            }],
         ),
 
         # RealSense D435 driver (frames d435i_*, topics /camera/d435/...) plus the
