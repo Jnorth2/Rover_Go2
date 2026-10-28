@@ -9,6 +9,8 @@ find_package(ament_cmake REQUIRED)
 
 install(PROGRAMS
   scripts/cloud_restamp_node.py
+  scripts/go2_map_ui.py
+  scripts/send_gps_goal.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -193,6 +193,14 @@ ros2 launch go2_nav groundstation_navigation.launch.py
 The camera feed is not part of the groundstation launch; view it with
 `groundstation/camera_gstreamer.sh`.
 
+The groundstation launch also serves a **campus map** at http://localhost:8080
+(Leaflet, OpenStreetMap or satellite, centered on Merryfield Hall). The robot and
+its trail come from localization (TF `map → base_link`). GPS is only used to place
+the map frame on the earth: fixes (±0.3 m or better) are paired with the
+localized antenna position (`map → gps`) and a rotation + offset is fitted once
+the robot has covered ~3 m. Disable with `use_map_ui:=false`, or run it alone with
+`ros2 run go2_nav go2_map_ui.py`.
+
 Each run starts a **new map** (`~/.ros/rtabmap.db` is deleted on startup). To keep
 mapping into the previous database pass `delete_db_on_start:=false`. The same
 default applies to `mapping.launch.py`.
