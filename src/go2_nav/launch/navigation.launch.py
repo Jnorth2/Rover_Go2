@@ -93,6 +93,12 @@ def generate_launch_description():
             description='Start the RealSense D435 and add it to RTAB-Map and the EKF',
         ),
         DeclareLaunchArgument(
+            'with_gps', default_value='false',
+            choices=['true', 'false'],
+            description='Start the RTK GPS rover and use RTK-fixed solutions as '
+                        'RTAB-Map position priors (rtabmap_gps.yaml)',
+        ),
+        DeclareLaunchArgument(
             'params_file',
             default_value=PathJoinSubstitution([
                 FindPackageShare('go2_nav'), 'config', 'nav2_params.yaml',
@@ -117,6 +123,7 @@ def generate_launch_description():
                 'use_sim_time': use_sim_time,
                 'use_camera': LaunchConfiguration('use_camera'),
                 'delete_db_on_start': LaunchConfiguration('delete_db_on_start'),
+                'with_gps': LaunchConfiguration('with_gps'),
                 'use_rviz': 'false',
             }.items(),
         ),

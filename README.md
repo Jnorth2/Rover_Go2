@@ -228,6 +228,7 @@ rest so the TF tree is complete when the costmaps activate.
 |----------|---------|-------------|
 | `delete_db_on_start` | `true` | Fresh RTAB-Map database each run |
 | `use_camera` | `true` | D435 driver, RGB-D in RTAB-Map and visual odometry in the EKF |
+| `with_gps` | `false` | RTK GPS rover + RTK-fixed fixes as RTAB-Map position priors (`rtabmap_gps.yaml`) |
 | `params_file` | `go2_nav/config/nav2_params.yaml` | Nav2 parameters |
 | `nav2_start_delay` | `5.0` | Seconds before Nav2 starts |
 | `lidar_min_range` | `0.5` | Drop lidar returns closer than this to the sensor (m); `0` disables |

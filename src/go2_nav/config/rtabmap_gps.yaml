@@ -1,0 +1,19 @@
+# Overrides applied on top of rtabmap_mapping.yaml (and rtabmap_camera.yaml) when
+# mapping.launch.py / navigation.launch.py run with with_gps:=true.
+#
+# Fixes arrive on gps/fix, remapped to /gps/fix_rtk: the u-blox rover's
+# /ublox_gps_node/fix passed through gps_fix_filter_node, which forwards only
+# RTK-fixed solutions so a float or single-point fix can't drag the map.
+rtabmap:
+  ros__parameters:
+    # Use GPS fixes as position priors in graph optimization (g2o / GTSAM only).
+    # Each node is pulled toward its GPS position, weighted by the fix covariance
+    # (u-blox hAcc/vAcc), which anchors the map to east-north-up around the first
+    # fix and removes long-range drift. Heading comes from fitting the trajectory
+    # to the GPS track, so no magnetometer or dual antenna is needed.
+    Optimizer/PriorsIgnored: "false"
+
+    # Only consider loop closures within RGBD/LocalRadius of the current GPS
+    # position (default true; set explicitly since it matters in open fields where
+    # distant patches of ground look alike)
+    Rtabmap/LoopGPS: "true"

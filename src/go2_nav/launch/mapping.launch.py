@@ -18,6 +18,11 @@ def generate_launch_description():
             "'rtabmap_camera.yaml' if '", LaunchConfiguration('use_camera'),
             "' == 'true' else 'rtabmap_mapping.yaml'",
         ])]),
+        # GPS overrides (rtabmap_gps.yaml) the same way, only with with_gps:=true
+        PathJoinSubstitution([config_dir, PythonExpression([
+            "'rtabmap_gps.yaml' if '", LaunchConfiguration('with_gps'),
+            "' == 'true' else 'rtabmap_mapping.yaml'",
+        ])]),
         {'use_sim_time': LaunchConfiguration('use_sim_time')},
     ]
     rtabmap_remappings = [
@@ -25,6 +30,8 @@ def generate_launch_description():
         ('rgbd_image', '/camera/d435/rgbd_image'),
         ('scan_cloud', '/utlidar/cloud_restamped'),
         ('grid_map', '/map'),
+        # Only RTK-fixed solutions (gps_fix_filter_node); silent with with_gps:=false
+        ('gps/fix', '/gps/fix_rtk'),
     ]
 
     return LaunchDescription([
@@ -58,6 +65,12 @@ def generate_launch_description():
             choices=['true', 'false'],
             description='Start the RealSense D435 driver and add the depth camera to '
                         'RTAB-Map (rtabmap_camera.yaml); false = lidar-only mapping',
+        ),
+        DeclareLaunchArgument(
+            'with_gps', default_value='false',
+            choices=['true', 'false'],
+            description='Start the RTK GPS rover (go2_odom gps_rover.launch.py) and use '
+                        'RTK-fixed solutions as RTAB-Map position priors (rtabmap_gps.yaml)',
         ),
         DeclareLaunchArgument(
             'use_visual_odom', default_value=LaunchConfiguration('use_camera'),
@@ -129,6 +142,35 @@ def generate_launch_description():
                 'use_sim_time': LaunchConfiguration('use_sim_time'),
                 'use_visual_odom': LaunchConfiguration('use_visual_odom'),
             }.items(),
+        ),
+
+        # RTK GPS rover: u-blox driver (RTCM corrections from /rtcm) → /ublox_gps_node/fix
+        IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([
+                PathJoinSubstitution([
+                    FindPackageShare('go2_odom'), 'launch', 'gps_rover.launch.py',
+                ]),
+            ]),
+            launch_arguments={'use_sim_time': LaunchConfiguration('use_sim_time')}.items(),
+            condition=IfCondition(LaunchConfiguration('with_gps')),
+        ),
+
+        # Pass only RTK-fixed fixes on to RTAB-Map
+        Node(
+            package='go2_odom',
+            executable='gps_fix_filter_node.py',
+            name='gps_fix_filter_node',
+            output='screen',
+            remappings=[
+                ('fix_in',  '/ublox_gps_node/fix'),
+                ('fix_out', '/gps/fix_rtk'),
+            ],
+            parameters=[{
+                'use_sim_time': LaunchConfiguration('use_sim_time'),
+                'require_rtk_fixed': True,
+                'max_horizontal_std': 0.10,
+            }],
+            condition=IfCondition(LaunchConfiguration('with_gps')),
         ),
 
         # Robot description: publishes /robot_description and static TF chain
